@@ -2,9 +2,9 @@
 node_modules/
 
 # Runtime data & uploads
-photos/
-videos/
-cache/
+/photos/
+/videos/
+/cache/
 
 # Config (may contain secrets like admin PIN hash or personal event data)
 config.json

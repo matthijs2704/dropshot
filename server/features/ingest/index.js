@@ -9,7 +9,7 @@ const { processPhoto, toCacheFilePath, PHOTOS_DIR } = require('./process');
 const { getConfig } = require('../../config');
 const { serializeHeroLocks } = require('../ws/handlers');
 
-const VALID_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
+const VALID_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif']);
 const MAX_CONCURRENT = 3;
 
 // ---------------------------------------------------------------------------

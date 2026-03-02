@@ -99,10 +99,13 @@ function _renderSubmissionCards(items, kind) {
 
   return items.map(item => {
     const age = fmtAgo(Date.now() - Number(item.submittedAt || 0));
+    const message = String(item.message || '').trim();
     return `
       <div class="queue-card">
         ${item.photoThumbUrl ? `<img class="queue-thumb" src="${esc(item.photoThumbUrl)}" alt="">` : ''}
-        <div class="queue-msg">${esc(item.message || '(no message)')}</div>
+        ${message
+    ? `<div class="queue-msg">${esc(message)}</div>`
+    : '<div class="queue-msg muted" style="font-size:12px">photo-only submission</div>'}
         <div class="queue-meta">${esc(item.submitterValue || 'anonymous')} · ${esc(age)}</div>
         <div class="queue-actions">
           ${kind === 'pending' ? `<button class="sc-btn" data-sub-action="approve" data-sub-id="${esc(item.id)}">Approve</button>

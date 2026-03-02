@@ -1,9 +1,10 @@
 // Screen entry point: identity, WebSocket, reconnect, message dispatch
 
 import {
-  setPhotos,
+  photoRegistry,
   addPhoto,
   removePhoto,
+  removePhotos,
   updatePhoto,
   setOtherVisibleIds,
 } from './photos.js';
@@ -20,6 +21,8 @@ import { startHeartbeat, stopHeartbeat, updateWs as updateHbWs } from './heartbe
 import { updateSlides, updatePlaylists, triggerPlaySoon, handleSlideAdvance } from './slides/index.js';
 import { initOverlays, applyOverlays, removeAllOverlays }  from './overlays/index.js';
 import { applyTheme } from './theme.js';
+import { preloadBatch, getPreloadedCount } from './preload.js';
+import { showSyncStatus, hideSyncStatus } from './sync-status.js';
 
 // ---------------------------------------------------------------------------
 // Waiting screen
@@ -63,8 +66,30 @@ initOverlays(SCREEN_ID);
 
 let ws       = null;
 let retryTimer = null;
+let cycleStartTimer = null;
 const RECONNECT_BASE = 2500;
 const RECONNECT_JITTER = 1500;
+
+function scheduleCycleStart() {
+  if (cycleStartTimer) return;
+  const startedAt = Date.now();
+
+  const tick = () => {
+    cycleStartTimer = null;
+    if (!photoRegistry.size) return;
+
+    const waitedMs = Date.now() - startedAt;
+    if (getPreloadedCount() > 0 || waitedMs >= 1200) {
+      hideWaiting();
+      startCycle();
+      return;
+    }
+
+    cycleStartTimer = setTimeout(tick, 120);
+  };
+
+  cycleStartTimer = setTimeout(tick, 80);
+}
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -89,6 +114,11 @@ function connect() {
     stopHeartbeat();
     stopCycle();
     removeAllOverlays();
+    hideSyncStatus();
+    if (cycleStartTimer) {
+      clearTimeout(cycleStartTimer);
+      cycleStartTimer = null;
+    }
     retryTimer = setTimeout(connect, RECONNECT_BASE + Math.random() * RECONNECT_JITTER);
   };
 }
@@ -100,7 +130,6 @@ function connect() {
 async function handleMessage(msg) {
   switch (msg.type) {
     case 'init':
-      setPhotos(msg.photos || []);
       if (msg.config) {
         updateConfig(msg.config);
         await applyTheme(msg.config.theme ?? null);
@@ -109,15 +138,51 @@ async function handleMessage(msg) {
       if (msg.heroLocks) updateHeroLocks(msg.heroLocks);
       if (msg.slides)    updateSlides(msg.slides);
       if (msg.playlists) updatePlaylists(msg.playlists);
-      // Hide waiting screen as soon as we have at least one photo ready
-      if ((msg.photos || []).some(p => p.status === 'ready')) hideWaiting();
-      startCycle();
+
+      if (photoRegistry.size > 0) {
+        scheduleCycleStart();
+      }
+
+      if (ws && ws.readyState === 1) {
+        const knownIds = Array.from(photoRegistry.keys());
+        const totalPhotos = Number(msg.totalPhotos || 0);
+        if (totalPhotos > 0 || knownIds.length > 0) showSyncStatus(0, totalPhotos);
+        ws.send(JSON.stringify({ type: 'sync_photos', knownIds }));
+      }
+      break;
+
+    case 'photo_batch': {
+      const removed = Array.isArray(msg.remove) ? msg.remove : [];
+      if (removed.length) removePhotos(removed);
+
+      const incoming = Array.isArray(msg.photos) ? msg.photos : [];
+      for (const photo of incoming) {
+        if (photo?.status === 'ready') addPhoto(photo);
+      }
+      preloadBatch(incoming);
+
+      if (msg.progress) {
+        showSyncStatus(msg.progress.sent || 0, msg.progress.total || 0);
+      }
+
+      if (photoRegistry.size > 0) {
+        scheduleCycleStart();
+      }
+      break;
+    }
+
+    case 'sync_complete':
+      hideSyncStatus();
+      if (photoRegistry.size > 0) {
+        scheduleCycleStart();
+      }
       break;
 
     case 'new_photo':
       if (msg.photo?.status === 'ready') {
         addPhoto(msg.photo);
-        hideWaiting(); // first photo arrived — dismiss the waiting screen
+        preloadBatch([msg.photo]);
+        scheduleCycleStart(); // first photo arrived — start once preload warms
       }
       break;
 

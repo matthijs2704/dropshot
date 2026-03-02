@@ -3,7 +3,6 @@
 const fs = require('fs');
 const fsp = require('fs').promises;
 const path = require('path');
-const { photoOverrides } = require('./state');
 
 const CONFIG_FILE = path.join(__dirname, '..', 'config.json');
 const MAX_SCREENS = 4;
@@ -97,11 +96,11 @@ function defaultConfig() {
     eventName: '',
     displayWidth: 1920,
     displayHeight: 1080,
-    adminPinHash: null,
+    healthBroadcastIntervalMs: 3000,
+    sessionSecret: null,
     theme: null,
     slides: [],
     playlists: [],
-    photoOverrides: {},
   };
 }
 
@@ -290,6 +289,32 @@ function sanitizeScreenConfig(input, base) {
   return next;
 }
 
+function sanitizeOidc(rawOidc) {
+  if (!rawOidc || typeof rawOidc !== 'object') return null;
+
+  const issuerUrl = typeof rawOidc.issuerUrl === 'string' ? rawOidc.issuerUrl.trim() : '';
+  const clientId = typeof rawOidc.clientId === 'string' ? rawOidc.clientId.trim() : '';
+  const clientSecret = typeof rawOidc.clientSecret === 'string' ? rawOidc.clientSecret.trim() : '';
+  const redirectUri = typeof rawOidc.redirectUri === 'string' ? rawOidc.redirectUri.trim() : '';
+  const providerName = typeof rawOidc.providerName === 'string' ? rawOidc.providerName.trim() : '';
+  const allowedEmails = Array.isArray(rawOidc.allowedEmails)
+    ? rawOidc.allowedEmails
+      .map(v => String(v || '').trim().toLowerCase())
+      .filter(Boolean)
+    : [];
+
+  if (!issuerUrl || !clientId || !clientSecret || !redirectUri) return null;
+
+  return {
+    issuerUrl,
+    clientId,
+    clientSecret,
+    redirectUri,
+    providerName: providerName || null,
+    allowedEmails,
+  };
+}
+
 function sanitizeConfig(input, validThemeIds) {
   const raw = input && typeof input === 'object' ? input : {};
   const next = defaultConfig();
@@ -319,7 +344,12 @@ function sanitizeConfig(input, validThemeIds) {
   next.displayWidth = Number.isFinite(width) ? Math.max(320, Math.floor(width)) : 1920;
   next.displayHeight = Number.isFinite(height) ? Math.max(240, Math.floor(height)) : 1080;
 
-  next.adminPinHash = typeof raw.adminPinHash === 'string' && raw.adminPinHash ? raw.adminPinHash : null;
+  const healthBroadcastIntervalMs = Number(raw.healthBroadcastIntervalMs);
+  next.healthBroadcastIntervalMs = Number.isFinite(healthBroadcastIntervalMs)
+    ? Math.max(1000, Math.min(30000, Math.floor(healthBroadcastIntervalMs)))
+    : 3000;
+
+  next.sessionSecret = typeof raw.sessionSecret === 'string' && raw.sessionSecret ? raw.sessionSecret : null;
 
   if (raw.theme === null || raw.theme === '' || raw.theme === undefined) {
     next.theme = null;
@@ -329,10 +359,6 @@ function sanitizeConfig(input, validThemeIds) {
 
   next.slides = Array.isArray(raw.slides) ? raw.slides : [];
   next.playlists = Array.isArray(raw.playlists) ? raw.playlists : [];
-
-  next.photoOverrides = raw.photoOverrides && typeof raw.photoOverrides === 'object'
-    ? raw.photoOverrides
-    : {};
 
   return next;
 }
@@ -344,11 +370,6 @@ function loadConfig() {
     const { migrated, changed } = _migrateLegacyRoot(rawParsed);
 
     config = sanitizeConfig(migrated);
-
-    photoOverrides.clear();
-    for (const [id, override] of Object.entries(config.photoOverrides || {})) {
-      photoOverrides.set(id, { heroCandidate: Boolean(override && override.heroCandidate) });
-    }
 
     if (changed) saveConfig();
   } catch {
@@ -367,12 +388,7 @@ function saveConfig() {
   }
   _savePending = true;
 
-  const overridesObj = {};
-  for (const [id, override] of photoOverrides.entries()) {
-    overridesObj[id] = override;
-  }
-
-  const payload = JSON.stringify({ ...config, photoOverrides: overridesObj }, null, 2);
+  const payload = JSON.stringify(config, null, 2);
   const tmp = CONFIG_FILE + '.tmp';
 
   fsp.writeFile(tmp, payload, 'utf8')
@@ -413,6 +429,11 @@ function sanitizeGlobalConfig(input, target, validThemeIds) {
     if (Number.isFinite(h)) target.displayHeight = Math.max(240, Math.floor(h));
   }
 
+  if (Object.prototype.hasOwnProperty.call(input, 'healthBroadcastIntervalMs')) {
+    const ms = Number(input.healthBroadcastIntervalMs);
+    if (Number.isFinite(ms)) target.healthBroadcastIntervalMs = Math.max(1000, Math.min(30000, Math.floor(ms)));
+  }
+
   if (Object.prototype.hasOwnProperty.call(input, 'screenCount')) {
     target.screenCount = _clampScreenCount(input.screenCount);
     for (let i = 1; i <= target.screenCount; i++) {
@@ -421,10 +442,6 @@ function sanitizeGlobalConfig(input, target, validThemeIds) {
     }
   }
 
-  if (Object.prototype.hasOwnProperty.call(input, 'adminPinHash')) {
-    const pinHash = input.adminPinHash;
-    target.adminPinHash = typeof pinHash === 'string' && pinHash ? pinHash : null;
-  }
 }
 
 function getScreenConfig(id) {
@@ -441,7 +458,7 @@ function setScreenConfig(id, patch) {
 }
 
 function getPublicConfig() {
-  const { adminPinHash, ...rest } = config;
+  const { sessionSecret, ...rest } = config;
   return rest;
 }
 
@@ -458,6 +475,7 @@ module.exports = {
   loadConfig,
   saveConfig,
   sanitizeScreenConfig,
+  sanitizeOidc,
   sanitizeConfig,
   sanitizeGlobalConfig,
   getScreenConfig,

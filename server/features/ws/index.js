@@ -8,6 +8,16 @@ const { getConfig, getPublicConfig } = require('../../config');
 const { buildStats } = require('../screens/routes');
 const state = require('../../state');
 
+let _healthTimer = null;
+
+function restartHealthBroadcast() {
+  if (_healthTimer) clearInterval(_healthTimer);
+  const intervalMs = getConfig().healthBroadcastIntervalMs || 3000;
+  _healthTimer = setInterval(() => {
+    broadcast({ type: 'health_update', stats: buildStats() });
+  }, intervalMs);
+}
+
 function createWss(httpServer) {
   const wss = new WebSocketServer({ server: httpServer });
   setWss(wss);
@@ -19,15 +29,15 @@ function createWss(httpServer) {
     ws.isAlive = true;
     ws.on('pong', function () { this.isAlive = true; });
 
-    // Send full initial state on connect
+    // Send initial state on connect; photos are synced in batches after init
     const cfg = getConfig();
     ws.send(JSON.stringify({
       type:       'init',
-      photos:     getReadyPhotos(),
       config:     getPublicConfig(),
       heroLocks:  serializeHeroLocks(),
       slides:     cfg.slides    || [],
       playlists:  cfg.playlists || [],
+      totalPhotos: getReadyPhotos().length,
     }));
 
     ws.on('message', raw => {
@@ -53,10 +63,8 @@ function createWss(httpServer) {
     });
   }, 10_000);
 
-  // Health broadcast every 3 s
-  setInterval(() => {
-    broadcast({ type: 'health_update', stats: buildStats() });
-  }, 3_000);
+  // Health broadcast every configured interval
+  restartHealthBroadcast();
 
   // Prune expired hero locks every 5 s
   setInterval(() => {
@@ -70,7 +78,7 @@ function createWss(httpServer) {
   return wss;
 }
 
-module.exports = { createWss };
+module.exports = { createWss, restartHealthBroadcast };
 
 // Re-export the stored wss so index.js can close it on shutdown
-module.exports.getWss = () => require('./broadcast').getWss();
+module.exports.getWss = () => require('./broadcast')._getWss();

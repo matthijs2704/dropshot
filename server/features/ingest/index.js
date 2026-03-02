@@ -4,10 +4,11 @@ const path = require('path');
 const fsp  = require('fs').promises;
 const state = require('../../state');
 const { broadcast } = require('../ws/broadcast');
-const { serializePhoto, getReadyPhotos } = require('../photos/serialize');
-const { processPhoto, toCacheFilePath, PHOTOS_DIR } = require('./process');
-const { getConfig } = require('../../config');
+const { getReadyPhotos } = require('../photos/serialize');
+const { processPhoto, toCacheFilePath, toThumbFilePath, PHOTOS_DIR } = require('./process');
+const { getPublicConfig } = require('../../config');
 const { serializeHeroLocks } = require('../ws/handlers');
+const { upsertPhotoMetadata, deletePhotoMetadata } = require('../../db');
 
 const VALID_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif']);
 const MAX_CONCURRENT = 3;
@@ -92,7 +93,7 @@ async function upsertPhotoFromPath(filePath) {
   //   "brand new" on every server restart.
   let addedAt = Date.now();
   if (!existing) {
-    const cachePath = require('./process').toCacheFilePath(id);
+    const cachePath = toCacheFilePath(id);
     try {
       const cStat = await fsp.stat(cachePath);
       // Cache exists → this photo was processed in a previous run; use mtime
@@ -111,6 +112,7 @@ async function upsertPhotoFromPath(filePath) {
     sourceUrl: `/photos-original/${id}`,
     displayUrl: '',
     addedAt,
+    processedAt: null,
     status: 'queued',
   };
 
@@ -120,6 +122,9 @@ async function upsertPhotoFromPath(filePath) {
   photo.name        = filename;
   photo.eventGroup  = toEventGroup(id);
   state.photosById.set(id, photo);
+  upsertPhotoMetadata(photo).catch(err => {
+    console.warn(`[ingest] failed to persist metadata for ${id}: ${err.message}`);
+  });
   ensureQueued(id);
   runQueue();
 }
@@ -135,6 +140,13 @@ async function removePhotoByPath(filePath) {
   if (existing?.cachePath) {
     try { await fsp.unlink(existing.cachePath); } catch {}
   }
+
+  const thumbPath = existing?.thumbPath || toThumbFilePath(id);
+  try { await fsp.unlink(thumbPath); } catch {}
+
+  deletePhotoMetadata(id).catch(err => {
+    console.warn(`[ingest] failed to delete metadata for ${id}: ${err.message}`);
+  });
 
   broadcast({ type: 'remove_photo', id, name: path.basename(id) });
 }
@@ -173,6 +185,11 @@ async function scanPhotos(isInitialScan = false) {
       if (photo.cachePath) {
         try { await fsp.unlink(photo.cachePath); } catch {}
       }
+      const thumbPath = photo.thumbPath || toThumbFilePath(id);
+      try { await fsp.unlink(thumbPath); } catch {}
+      deletePhotoMetadata(id).catch(err => {
+        console.warn(`[ingest] failed to delete stale metadata for ${id}: ${err.message}`);
+      });
       broadcast({ type: 'remove_photo', id, name: photo.name });
     }
   }
@@ -182,7 +199,12 @@ async function scanPhotos(isInitialScan = false) {
   // the full init to avoid resetting live screens; individual new_photo /
   // remove_photo messages already keep clients up to date.
   if (isInitialScan) {
-    broadcast({ type: 'init', photos: getReadyPhotos(), config: getConfig(), heroLocks: serializeHeroLocks() });
+    broadcast({
+      type: 'init',
+      config: getPublicConfig(),
+      heroLocks: serializeHeroLocks(),
+      totalPhotos: getReadyPhotos().length,
+    });
   }
 
   console.log(`Scanned ${files.length} photos`);

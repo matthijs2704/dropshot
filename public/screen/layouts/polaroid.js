@@ -162,7 +162,7 @@ export function buildPolaroid(photos) {
     ].join('');
 
     const img = document.createElement('img');
-    img.src   = photo.displayUrl || photo.url;
+    img.src   = photo.thumbUrl || photo.displayUrl || photo.url;
     img.alt   = photo.name || '';
     // object-fit:cover + object-position:center crops to square from centre
     img.style.cssText = 'width:100%;height:100%;object-fit:cover;object-position:center;display:block;';

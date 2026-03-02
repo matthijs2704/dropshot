@@ -41,6 +41,8 @@ router.post('/config', (req, res) => {
 
   sanitizeGlobalConfig(body, config, getValidThemeIds());
   saveConfig();
+  const { restartHealthBroadcast } = require('../ws/index');
+  restartHealthBroadcast();
   broadcast({ type: 'config_update', config: getPublicConfig() });
   res.json({ ok: true });
 });

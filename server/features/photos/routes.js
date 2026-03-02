@@ -7,11 +7,11 @@ const fsp     = require('fs').promises;
 const fs      = require('fs');
 
 const state   = require('../../state');
-const { saveConfig } = require('../../config');
 const { broadcast }  = require('../ws/broadcast');
 const { serializePhoto, getAllPhotos } = require('./serialize');
 const { upsertPhotoFromPath, PHOTOS_DIR } = require('../ingest/index');
-const { toCacheFilePath } = require('../ingest/process');
+const { toCacheFilePath, toThumbFilePath } = require('../ingest/process');
+const { setHeroCandidate, deletePhotoMetadata, upsertPhotoMetadata } = require('../../db');
 
 const router = express.Router();
 
@@ -117,9 +117,14 @@ router.patch('/:id(*)', async (req, res) => {
 
   const existing = state.photoOverrides.get(id) || {};
   state.photoOverrides.set(id, { ...existing, heroCandidate });
-  saveConfig();
+  setHeroCandidate(id, heroCandidate).catch(err => {
+    console.warn(`[photos] failed to persist heroCandidate for ${id}: ${err.message}`);
+  });
 
   const photo = state.photosById.get(id);
+  upsertPhotoMetadata(photo).catch(err => {
+    console.warn(`[photos] failed to persist metadata for ${id}: ${err.message}`);
+  });
   broadcast({ type: 'photo_update', photo: serializePhoto(photo) });
 
   res.json({ ok: true });
@@ -154,9 +159,13 @@ router.delete('/:id(*)', async (req, res) => {
   await deleteFile(photo.sourcePath);
 
   const cachePath = photo.cachePath || toCacheFilePath(id);
+  const thumbPath = photo.thumbPath || toThumbFilePath(id);
   await deleteFile(cachePath);
+  await deleteFile(thumbPath);
 
-  saveConfig(); // persist photoOverrides removal
+  deletePhotoMetadata(id).catch(err => {
+    console.warn(`[photos] failed to delete metadata for ${id}: ${err.message}`);
+  });
 
   res.json({ ok: true });
 });

@@ -200,7 +200,7 @@ function _renderPhotoCard(photo) {
     ? `<span class="photo-status-badge status-${esc(photo.status)}">${esc(photo.status)}</span>`
     : '';
   const heroClass = photo.heroCandidate ? 'active' : '';
-  const imgSrc    = photo.displayUrl || photo.url || '';
+  const imgSrc    = photo.thumbUrl || photo.displayUrl || photo.url || '';
 
   return `
     <div class="photo-card" data-id="${esc(photo.id)}">
@@ -226,5 +226,4 @@ function _renderPhotoCard(photo) {
       </div>
     </div>`;
 }
-
 

@@ -1,23 +1,26 @@
 'use strict';
 
-const express = require('express');
-const httpMod = require('http');
-const path    = require('path');
-const fs      = require('fs');
+const express     = require('express');
+const httpMod     = require('http');
+const path        = require('path');
+const fs          = require('fs');
+const crypto      = require('crypto');
+const session     = require('express-session');
+const compression = require('compression');
 
-const { loadConfig } = require('./config');
+const { loadConfig, getConfig, saveConfig } = require('./config');
+const { initDb, loadPhotoOverrides, DB_PATH } = require('./db');
 const state          = require('./state');
 const { createWss }  = require('./features/ws/index');
 const { startWatcher } = require('./features/ingest/watcher');
 const { scanPhotos, PHOTOS_DIR } = require('./features/ingest/index');
-const { CACHE_DIR }  = require('./features/ingest/process');
+const { CACHE_DIR, THUMB_DIR } = require('./features/ingest/process');
 
 const photosRouter  = require('./features/photos/routes');
 const screensRouter = require('./features/screens/routes');
 const { slidesRouter, playlistRouter } = require('./features/slides/routes');
 const themesRouter  = require('./features/themes/routes');
-const authRouter    = require('./features/auth/routes');
-const { requirePin } = require('./features/auth/routes');
+const { router: authRouter, requireAuth } = require('./features/auth/routes');
 const { THEMES_DIR } = require('./features/themes/store');
 
 // Ensure required directories exist
@@ -28,13 +31,30 @@ const QR_CACHE_DIR     = path.join(__dirname, '..', 'cache', 'qr');
 
 fs.mkdirSync(PHOTOS_DIR,  { recursive: true });
 fs.mkdirSync(CACHE_DIR,   { recursive: true });
+fs.mkdirSync(THUMB_DIR,   { recursive: true });
 fs.mkdirSync(VIDEOS_DIR,  { recursive: true });
 fs.mkdirSync(IMAGES_DIR,  { recursive: true });
 fs.mkdirSync(QR_CACHE_DIR, { recursive: true });
 fs.mkdirSync(THEMES_DIR,   { recursive: true });
 
-// Load persisted config + photo overrides
+// Load persisted config
 loadConfig();
+
+function _getOrCreateSessionSecret() {
+  const cfg = getConfig();
+  if (typeof cfg.sessionSecret === 'string' && cfg.sessionSecret) return cfg.sessionSecret;
+  cfg.sessionSecret = crypto.randomBytes(32).toString('hex');
+  saveConfig();
+  return cfg.sessionSecret;
+}
+
+async function _loadPhotoOverridesFromDb() {
+  const entries = await loadPhotoOverrides();
+  state.photoOverrides.clear();
+  for (const entry of entries) {
+    state.photoOverrides.set(entry.id, { heroCandidate: Boolean(entry.heroCandidate) });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // HTTP server + Express
@@ -43,27 +63,50 @@ loadConfig();
 const app    = express();
 const server = httpMod.createServer(app);
 
+app.use(compression());
 app.use(express.json());
+app.use(session({
+  name: 'pixelplein.sid',
+  secret: _getOrCreateSessionSecret(),
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  },
+}));
 
 // Static file serving — cache/display served at /photos, originals at /photos-original
 app.use('/photos', (req, _res, next) => {
   state.metrics.cacheFileServed += 1;
   next();
-}, express.static(CACHE_DIR));
+}, express.static(CACHE_DIR, {
+  maxAge: '1y',
+  immutable: true,
+}));
+
+app.use('/thumbs', express.static(THUMB_DIR, {
+  maxAge: '1y',
+  immutable: true,
+}));
 
 app.use('/photos-original',  express.static(PHOTOS_DIR));
 app.use('/slide-assets',     express.static(SLIDE_ASSETS_DIR));
-app.use('/cache/qr',         express.static(QR_CACHE_DIR));
+app.use('/cache/qr',         express.static(QR_CACHE_DIR, {
+  maxAge: '1y',
+  immutable: true,
+}));
 app.use('/themes',           express.static(THEMES_DIR));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// API routes — /api/auth is public (status + pin setup); everything else requires PIN when set
+// API routes — /api/auth is public; everything else requires a session
 app.use('/api/auth',       authRouter);
-app.use('/api/photos',     requirePin, photosRouter);
-app.use('/api/slides',     requirePin, slidesRouter);
-app.use('/api/playlists',  requirePin, playlistRouter);
+app.use('/api/photos',     requireAuth, photosRouter);
+app.use('/api/slides',     requireAuth, slidesRouter);
+app.use('/api/playlists',  requireAuth, playlistRouter);
 app.use('/api/themes',     themesRouter);  // read-only theme listing, no PIN needed
-app.use('/api',            requirePin, screensRouter);
+app.use('/api',            requireAuth, screensRouter);
 
 // ---------------------------------------------------------------------------
 // WebSocket server
@@ -72,40 +115,39 @@ app.use('/api',            requirePin, screensRouter);
 createWss(server);
 
 // ---------------------------------------------------------------------------
-// File watcher
-// ---------------------------------------------------------------------------
-
-startWatcher();
-
-// ---------------------------------------------------------------------------
 // Initial scan
 // ---------------------------------------------------------------------------
 
-scanPhotos(true).catch(err => {
-  console.error('Initial scan failed:', err.message);
-});
+async function boot() {
+  await initDb();
+  await _loadPhotoOverridesFromDb();
 
-// ---------------------------------------------------------------------------
-// Listen
-// ---------------------------------------------------------------------------
+  startWatcher();
+  await scanPhotos(true);
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`\nPixelPlein running on http://0.0.0.0:${PORT}`);
-  console.log(`  Screen 1   : http://<your-ip>:${PORT}/screen.html?screen=1`);
-  console.log(`  Screen 2   : http://<your-ip>:${PORT}/screen.html?screen=2`);
-  console.log(`  Admin      : http://<your-ip>:${PORT}/admin.html`);
-  console.log(`  Preview    : http://<your-ip>:${PORT}/preview.html`);
-  console.log(`  Photos     : ${PHOTOS_DIR}`);
-  console.log(`  Cache      : ${CACHE_DIR}`);
-  console.log(`  Videos     : ${VIDEOS_DIR}\n`);
+  const PORT = process.env.PORT || 3000;
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`\nPixelPlein running on http://0.0.0.0:${PORT}`);
+    console.log(`  Screen 1   : http://<your-ip>:${PORT}/screen.html?screen=1`);
+    console.log(`  Screen 2   : http://<your-ip>:${PORT}/screen.html?screen=2`);
+    console.log(`  Admin      : http://<your-ip>:${PORT}/admin.html`);
+    console.log(`  Login      : http://<your-ip>:${PORT}/login.html`);
+    console.log(`  Preview    : http://<your-ip>:${PORT}/preview.html`);
+    console.log(`  Photos     : ${PHOTOS_DIR}`);
+    console.log(`  Cache      : ${CACHE_DIR}`);
+    console.log(`  Videos     : ${VIDEOS_DIR}`);
+    console.log(`  Database   : ${DB_PATH}\n`);
+  });
+}
+
+boot().catch(err => {
+  console.error('Startup failed:', err.message);
 });
 
 // ---------------------------------------------------------------------------
 // Graceful shutdown
 // ---------------------------------------------------------------------------
 
-const { saveConfig } = require('./config');
 const { _getWss }    = require('./features/ws/broadcast');
 
 let _shuttingDown = false;

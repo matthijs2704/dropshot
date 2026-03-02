@@ -3,6 +3,7 @@
 const state  = require('../../state');
 const { broadcast, broadcastToScreens } = require('./broadcast');
 const { updateSlide, getSlides }        = require('../slides/store');
+const { getReadyPhotos }                = require('../photos/serialize');
 const { getConfig }                     = require('../../config');
 
 // ---------------------------------------------------------------------------
@@ -175,6 +176,51 @@ function handleMessage(ws, msg) {
     }
 
     _tryAdvance(playlistId);
+    return;
+  }
+
+  // --- Screen: request photo delta sync ---
+  if (msg.type === 'sync_photos') {
+    const knownIds = new Set(Array.isArray(msg.knownIds) ? msg.knownIds.map(String) : []);
+    const readyPhotos = getReadyPhotos();
+    const serverIds = new Set(readyPhotos.map(p => p.id));
+
+    const toAdd = readyPhotos.filter(p => !knownIds.has(p.id));
+    const toRemove = Array.from(knownIds).filter(id => !serverIds.has(id));
+
+    const BATCH_SIZE = 50;
+    const total = toAdd.length;
+    let sent = 0;
+
+    const sendBatch = (offset) => {
+      if (ws.readyState !== 1) return;
+
+      if (offset >= toAdd.length) {
+        if (!toAdd.length && toRemove.length) {
+          ws.send(JSON.stringify({
+            type: 'photo_batch',
+            photos: [],
+            remove: toRemove,
+            progress: { sent: 0, total },
+          }));
+        }
+        ws.send(JSON.stringify({ type: 'sync_complete', total }));
+        return;
+      }
+
+      const photos = toAdd.slice(offset, offset + BATCH_SIZE);
+      sent += photos.length;
+      ws.send(JSON.stringify({
+        type: 'photo_batch',
+        photos,
+        remove: offset === 0 ? toRemove : [],
+        progress: { sent, total },
+      }));
+
+      setImmediate(() => sendBatch(offset + BATCH_SIZE));
+    };
+
+    sendBatch(0);
     return;
   }
 }

@@ -55,6 +55,30 @@
     0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
     40%           { transform: scale(1.0); opacity: 1;   }
   }
+
+  /* Optional sync progress badge (batched delta sync) */
+  #sync-status {
+    position: fixed;
+    left: 16px;
+    bottom: 16px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.58);
+    color: rgba(255, 255, 255, 0.88);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    letter-spacing: 0.01em;
+    z-index: 40;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  #sync-status.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
 </style>
 </head>
 <body>
@@ -71,6 +95,7 @@
   </div>
 </div>
 
+<div id="sync-status"></div>
 <div id="display"></div>
 <script type="module" src="/screen/app.js"></script>
 </body>

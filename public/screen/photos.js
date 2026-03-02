@@ -1,5 +1,7 @@
 // Photo pool management: recency-weighted selection, hero picking, slot assignment
 
+import { clearPreloaded, isPreloaded } from './preload.js';
+
 /** @type {Map<string, Object>} All known photos keyed by id */
 export const photoRegistry = new Map();
 
@@ -41,25 +43,16 @@ export function removePhoto(id) {
   recentlyShown.delete(id);
   heroShownAt.delete(id);
   showCounts.delete(id);
+  clearPreloaded(id);
+}
+
+export function removePhotos(ids) {
+  if (!Array.isArray(ids)) return;
+  for (const id of ids) removePhoto(id);
 }
 
 export function updatePhoto(photo) {
   photoRegistry.set(photo.id, photo);
-}
-
-/**
- * Replace the entire photo registry (e.g. on reconnect).
- */
-export function setPhotos(photos) {
-  photoRegistry.clear();
-  recentlyShown.clear();
-  heroShownAt.clear();
-  showCounts.clear();
-
-  for (const p of photos) {
-    photoRegistry.set(p.id, p);
-    showCounts.set(p.id, 0);
-  }
 }
 
 export function setOtherVisibleIds(ids) {
@@ -168,6 +161,8 @@ function buildRelativeRecencyMap(pool, recencyBias) {
  *     scaled down further so the same photo doesn't repeat too quickly.
  *  4. heroCandidate flag — 2× boost (hero picker handles the main hero logic;
  *     this just makes candidates appear slightly more in non-hero slots too).
+ *  5. preload readiness — photos already preloaded on the client are strongly
+ *     preferred so transitions avoid visible pop-in on slower links.
  *
  * @param {Object}          photo
  * @param {Map<string,number>} recencyMap - pre-built relative recency multipliers
@@ -190,7 +185,10 @@ function photoWeight(photo, recencyMap, now) {
   // 4. heroCandidate flag
   const heroBump = photo.heroCandidate ? 2.0 : 1.0;
 
-  return recencyMult * fairnessMult * recentMult * heroBump;
+  // 5. Prefer images already preloaded in browser cache
+  const preloadMult = isPreloaded(photo.id) ? 1.0 : 0.15;
+
+  return recencyMult * fairnessMult * recentMult * heroBump * preloadMult;
 }
 
 function lerp(a, b, t) { return a + (b - a) * t; }
@@ -220,9 +218,6 @@ export function pickPhotos(count, cfg, excludeIds = [], hardExcludeOtherScreen =
 
   const picked   = [];
   const pickedSet = new Set();
-
-  // Soft-exclude candidates (other-screen dupes) used as fallback
-  const softExcluded = [];
 
   for (let i = 0; i < count; i++) {
     // Build scored candidate list excluding already-picked and hard-excluded IDs

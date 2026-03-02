@@ -1,15 +1,24 @@
-import { setPin, loadPinStatus, storePin } from '../api.js';
+import {
+  loadUsers,
+  addUser,
+  removeUser,
+  loadOidcConfig,
+  saveOidcConfig,
+  disableOidc,
+  loadMe,
+} from '../api.js';
 import { showToast as _toast } from '../app.js';
+import { esc as _esc } from '/shared/utils.js';
 
 let _getConfig = null;
 let _onChanged = null;
-let _pinSet = false;
+let _currentUsername = '';
 
 export function initSettingsTab(getConfig, onChanged) {
   _getConfig = getConfig;
   _onChanged = onChanged;
   _bind();
-  _refreshPinStatus();
+  _loadAuthSections();
 }
 
 export function refreshFromConfig() {
@@ -20,8 +29,7 @@ export function refreshFromConfig() {
   _setVal('settings-screen-count', cfg.screenCount || 2);
   _setVal('settings-display-width', cfg.displayWidth || 1920);
   _setVal('settings-display-height', cfg.displayHeight || 1080);
-  _syncPinButtons();
-  _refreshPinStatus();
+  _setVal('settings-health-interval', Math.round((cfg.healthBroadcastIntervalMs || 3000) / 1000));
 }
 
 function _bind() {
@@ -43,6 +51,14 @@ function _bind() {
     _onChanged?.();
   });
 
+  document.getElementById('settings-health-interval')?.addEventListener('input', e => {
+    const cfg = _getConfig();
+    const parsed = parseInt(e.target.value || '3', 10);
+    const seconds = Number.isFinite(parsed) ? Math.max(1, Math.min(30, parsed)) : 3;
+    cfg.healthBroadcastIntervalMs = seconds * 1000;
+    _onChanged?.();
+  });
+
   document.getElementById('settings-screen-count')?.addEventListener('change', e => {
     const cfg = _getConfig();
     const n = Math.max(1, Math.min(4, parseInt(e.target.value || '2', 10)));
@@ -59,57 +75,121 @@ function _bind() {
     _onChanged?.();
   });
 
-  document.getElementById('btn-set-pin')?.addEventListener('click', async () => {
-    const pin = _getVal('set-pin-new').trim();
-    const confirmPin = _getVal('set-pin-confirm').trim();
-
-    if (pin !== confirmPin) return _toast('PINs do not match', true);
-    if (!/^\d{4,8}$/.test(pin)) return _toast('PIN must be 4-8 digits', true);
+  document.getElementById('btn-add-user')?.addEventListener('click', async () => {
+    const username = _getVal('new-user-username').trim();
+    const password = _getVal('new-user-password');
+    if (!username) return _toast('Username is required', true);
+    if (password.length < 8) return _toast('Password must be at least 8 characters', true);
 
     try {
-      await setPin(pin);
-      storePin(pin);
-      _pinSet = true;
-      _syncPinButtons();
-      _setVal('set-pin-new', '');
-      _setVal('set-pin-confirm', '');
-      _toast('Admin PIN set');
+      await addUser(username, password);
+      _setVal('new-user-username', '');
+      _setVal('new-user-password', '');
+      _toast(`User ${username} added`);
+      await _loadUsersSection();
     } catch (err) {
-      _toast(`PIN update failed: ${err.message}`, true);
+      _toast(err.message, true);
     }
   });
 
-  document.getElementById('btn-clear-pin')?.addEventListener('click', async () => {
+  document.getElementById('btn-save-oidc')?.addEventListener('click', async () => {
+    const issuerUrl = _getVal('oidc-issuer').trim();
+    const clientId = _getVal('oidc-client-id').trim();
+    const clientSecret = _getVal('oidc-client-secret');
+    const redirectUri = _getVal('oidc-redirect-uri').trim();
+    const providerName = _getVal('oidc-provider-name').trim();
+    const allowedEmails = _getVal('oidc-allowed-emails')
+      .split('\n')
+      .map(v => v.trim())
+      .filter(Boolean);
+
     try {
-      await setPin('');
-      storePin('');
-      _pinSet = false;
-      _syncPinButtons();
-      _setVal('set-pin-new', '');
-      _setVal('set-pin-confirm', '');
-      _toast('Admin PIN cleared');
+      await saveOidcConfig({ issuerUrl, clientId, clientSecret, redirectUri, providerName, allowedEmails });
+      _toast('OIDC configuration saved');
+      await _loadOidcSection();
     } catch (err) {
-      _toast(`PIN clear failed: ${err.message}`, true);
+      _toast(err.message, true);
+    }
+  });
+
+  document.getElementById('btn-disable-oidc')?.addEventListener('click', async () => {
+    try {
+      await disableOidc();
+      _toast('OIDC disabled');
+      await _loadOidcSection();
+    } catch (err) {
+      _toast(err.message, true);
     }
   });
 }
 
-async function _refreshPinStatus() {
+async function _loadAuthSections() {
   try {
-    const res = await loadPinStatus();
-    _pinSet = Boolean(res?.pinSet);
-    _syncPinButtons();
+    const me = await loadMe();
+    _currentUsername = me?.username || '';
   } catch {
-    _pinSet = false;
-    _syncPinButtons();
+    _currentUsername = '';
+  }
+
+  await _loadUsersSection();
+  await _loadOidcSection();
+}
+
+async function _loadUsersSection() {
+  const listEl = document.getElementById('settings-users-list');
+  if (!listEl) return;
+
+  try {
+    const res = await loadUsers();
+    const users = Array.isArray(res?.users) ? res.users : [];
+    if (!users.length) {
+      listEl.innerHTML = '<div class="quick-hint">No local users configured.</div>';
+      return;
+    }
+
+    listEl.innerHTML = users.map(u => {
+      const self = _currentUsername && _currentUsername.toLowerCase() === String(u.username || '').toLowerCase();
+      return `
+        <div class="action-row" style="justify-content:space-between;border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--surface2)">
+          <div style="font-size:13px">${_esc(u.username)}</div>
+          <button class="btn btn-danger btn-sm" data-remove-user="${_esc(u.username)}" ${self ? 'disabled title="Cannot remove your own account"' : ''}>Remove</button>
+        </div>
+      `;
+    }).join('');
+
+    listEl.querySelectorAll('[data-remove-user]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const username = btn.getAttribute('data-remove-user');
+        try {
+          await removeUser(username);
+          _toast(`User ${username} removed`);
+          await _loadUsersSection();
+        } catch (err) {
+          _toast(err.message, true);
+        }
+      });
+    });
+  } catch (err) {
+    listEl.innerHTML = `<div class="quick-hint" style="color:var(--red)">${_esc(err.message || 'Failed to load users')}</div>`;
   }
 }
 
-function _syncPinButtons() {
-  const clearBtn = document.getElementById('btn-clear-pin');
-  const status = document.getElementById('pin-status-label');
-  if (clearBtn) clearBtn.style.display = _pinSet ? '' : 'none';
-  if (status) status.textContent = _pinSet ? 'PIN is currently set' : 'No PIN set';
+async function _loadOidcSection() {
+  try {
+    const res = await loadOidcConfig();
+    const oidc = res?.oidc;
+    _setVal('oidc-issuer', oidc?.issuerUrl || '');
+    _setVal('oidc-client-id', oidc?.clientId || '');
+    _setVal('oidc-client-secret', oidc?.clientSecret || '');
+    _setVal('oidc-redirect-uri', oidc?.redirectUri || `${location.origin}/api/auth/oidc/callback`);
+    _setVal('oidc-provider-name', oidc?.providerName || '');
+    _setVal('oidc-allowed-emails', Array.isArray(oidc?.allowedEmails) ? oidc.allowedEmails.join('\n') : '');
+
+    const status = document.getElementById('oidc-status-label');
+    if (status) status.textContent = oidc ? 'OIDC is configured' : 'OIDC is disabled';
+  } catch (err) {
+    _toast(`Failed to load OIDC config: ${err.message}`, true);
+  }
 }
 
 function _setVal(id, val) {
@@ -120,5 +200,3 @@ function _setVal(id, val) {
 function _getVal(id) {
   return document.getElementById(id)?.value || '';
 }
-
-

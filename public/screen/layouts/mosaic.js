@@ -60,7 +60,9 @@ export function buildMosaic(templateName, heroPhoto, otherPhotos, minTilePx, cfg
 
     if (photo) {
       const img = document.createElement('img');
-      img.src   = photo.displayUrl || photo.url;
+      img.src   = slotDef.hero
+        ? (photo.displayUrl || photo.url)
+        : (photo.thumbUrl || photo.displayUrl || photo.url);
       img.alt   = photo.name;
       img.style.cssText = 'width:100%;height:100%;display:block;object-fit:cover;';
       applySmartFit(img, photo, Boolean(slotDef.portrait));

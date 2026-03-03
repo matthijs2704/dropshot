@@ -47,7 +47,7 @@ function _statusPill(status) {
 function _formatStart(iso) {
   const ms = Number(new Date(iso));
   if (!Number.isFinite(ms)) return 'invalid date';
-  return new Date(ms).toLocaleString();
+  return new Date(ms).toLocaleString([], { hour12: false });
 }
 
 // Position options keyed by style
@@ -138,9 +138,9 @@ function _renderAlerts(alerts) {
 
   root.innerHTML = sorted.map(alert => {
     const state = alert.dismissed ? 'dismissed' : alert.active ? 'live' : alert.scheduledAt ? 'scheduled' : 'idle';
-    const when = alert.scheduledAt ? new Date(alert.scheduledAt).toLocaleString() : 'manual';
+    const when = alert.scheduledAt ? new Date(alert.scheduledAt).toLocaleString([], { hour12: false }) : 'manual';
     const position = alert.position ? ` · ${esc(alert.position)}` : '';
-    const countdown = alert.countdownTo ? ` · countdown to ${new Date(alert.countdownTo).toLocaleString()}` : '';
+    const countdown = alert.countdownTo ? ` · countdown to ${new Date(alert.countdownTo).toLocaleString([], { hour12: false })}` : '';
 
     // State-aware buttons
     const canFire    = state !== 'live';

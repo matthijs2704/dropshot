@@ -8,19 +8,20 @@
 //
 // Themeable via CSS custom properties; all have sensible fallbacks.
 
-let _barEl       = null;
-let _clockEl     = null;
-let _eventEl     = null;
-let _eventNameEl = null;
-let _eventTimeEl = null;
-let _tickerEl    = null;
-let _tickerInner = null;
+let _barEl        = null;
+let _clockEl      = null;
+let _eventEl      = null;
+let _eventLabelEl = null;
+let _eventNameEl  = null;
+let _eventTimeEl  = null;
+let _tickerEl     = null;
+let _tickerInner  = null;
 
 let _clockTimer      = null;
 let _countdownTimer  = null;
 
 // Last-rendered event slot state — used to detect meaningful changes for fade transition
-let _eventSlotLast = { name: null, timeVisible: null, visible: null };
+let _eventSlotLast = { name: null, timeVisible: null, visible: null, kind: null };
 let _tickerFrame     = null;
 
 let _cfg      = {};
@@ -105,6 +106,11 @@ function _ensureStyle() {
       color: var(--infobar-event-color, #ffffff);
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    #overlay-infobar-event-label {
+      flex-shrink: 0;
+      color: var(--infobar-event-label-color, rgba(255, 255, 255, 0.55));
     }
 
     #overlay-infobar-event-time {
@@ -254,6 +260,11 @@ function _applyEventSlot(slot) {
   }
 
   _eventEl.style.display = '';
+  if (_eventLabelEl) {
+    if (slot.kind === 'current')     _eventLabelEl.textContent = 'Nu: ';
+    else if (slot.kind === 'next')   _eventLabelEl.textContent = 'Zometeen: ';
+    else                             _eventLabelEl.textContent = '';
+  }
   if (_eventNameEl) _eventNameEl.textContent = slot.name;
 
   if (_eventTimeEl) {
@@ -283,10 +294,12 @@ function _refreshEventSlot() {
   const newName        = slot ? slot.name : null;
   const newTimeVisible = slot ? (slot.remaining !== null && Number.isFinite(slot.remaining) && slot.remaining > 0) : null;
   const newVisible     = slot !== null;
+  const newKind        = slot ? slot.kind : null;
 
   const changed = newVisible     !== _eventSlotLast.visible
                || newName        !== _eventSlotLast.name
-               || newTimeVisible !== _eventSlotLast.timeVisible;
+               || newTimeVisible !== _eventSlotLast.timeVisible
+               || newKind        !== _eventSlotLast.kind;
 
   if (!changed) {
     // Only the countdown number ticked — update it in place without fading
@@ -297,7 +310,7 @@ function _refreshEventSlot() {
   }
 
   // Meaningful change — fade out, swap content, fade in
-  _eventSlotLast = { name: newName, timeVisible: newTimeVisible, visible: newVisible };
+  _eventSlotLast = { name: newName, timeVisible: newTimeVisible, visible: newVisible, kind: newKind };
 
   if (_eventEl.style.display === 'none' || _eventEl.style.opacity === '0') {
     // Slot was hidden — apply immediately then fade in
@@ -458,6 +471,10 @@ function _buildBar(cfg) {
     _eventEl.id = 'overlay-infobar-event';
     _eventEl.style.display = 'none'; // hidden until there's something to show
 
+    _eventLabelEl = document.createElement('span');
+    _eventLabelEl.id = 'overlay-infobar-event-label';
+    _eventEl.appendChild(_eventLabelEl);
+
     _eventNameEl = document.createElement('span');
     _eventNameEl.id = 'overlay-infobar-event-name';
     _eventEl.appendChild(_eventNameEl);
@@ -469,6 +486,7 @@ function _buildBar(cfg) {
     bar.appendChild(_eventEl);
   } else {
     _eventEl = null;
+    _eventLabelEl = null;
     _eventNameEl = null;
     _eventTimeEl = null;
   }
@@ -532,7 +550,7 @@ export function mountInfoBar(cfg, schedule) {
   _barEl = _buildBar(_cfg);
   document.body.appendChild(_barEl);
 
-  _eventSlotLast = { name: null, timeVisible: null, visible: null };
+  _eventSlotLast = { name: null, timeVisible: null, visible: null, kind: null };
 
   if (_cfg.infoBarShowClock !== false) _startClock();
   const showAnyEvent = _cfg.infoBarShowCurrentEvent !== false || _cfg.infoBarShowNextEvent !== false;
@@ -553,11 +571,11 @@ export function removeInfoBar() {
   _stopCountdownTimer();
   _stopTicker();
   if (_barEl) { _barEl.remove(); _barEl = null; }
-  _clockEl = _eventEl = _eventNameEl = _eventTimeEl = _tickerEl = _tickerInner = null;
+  _clockEl = _eventEl = _eventLabelEl = _eventNameEl = _eventTimeEl = _tickerEl = _tickerInner = null;
   _alert = null;
   _tickerMessages = [];
   _tickerMsgIndex = 0;
-  _eventSlotLast = { name: null, timeVisible: null, visible: null };
+  _eventSlotLast = { name: null, timeVisible: null, visible: null, kind: null };
 }
 
 /**

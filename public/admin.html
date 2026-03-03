@@ -466,6 +466,34 @@
               <input id="schedule-countdown-from" type="number" min="0" max="240" value="0" placeholder="30">
             </div>
           </div>
+          <div class="two-col" style="margin-top:10px">
+            <div class="field">
+              <label for="schedule-alert-style">Alert style</label>
+              <select id="schedule-alert-style">
+                <option value="banner">Banner</option>
+                <option value="popup">Popup</option>
+                <option value="countdown">Countdown</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="schedule-alert-position">Alert position</label>
+              <select id="schedule-alert-position">
+                <option value="top-center">Top center</option>
+                <option value="top-left">Top left</option>
+                <option value="top-right">Top right</option>
+                <option value="bottom-left">Bottom left</option>
+                <option value="bottom-right">Bottom right</option>
+                <option value="center">Center (popup)</option>
+              </select>
+            </div>
+          </div>
+          <div class="two-col" style="margin-top:10px">
+            <div class="field">
+              <label for="schedule-alert-duration">Alert duration (seconds, 0 = persistent)</label>
+              <input id="schedule-alert-duration" type="number" min="0" max="3600" value="18">
+            </div>
+            <div class="field"></div>
+          </div>
           <div class="action-row" style="margin-top:10px">
             <button id="schedule-add" class="btn btn-primary btn-sm">Add event</button>
           </div>

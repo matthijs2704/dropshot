@@ -33,13 +33,17 @@ function _createReminderAlert(eventEntry, minutesBefore, now) {
     : `starts in ${minutesBefore} minute${minutesBefore === 1 ? '' : 's'}`;
   const locationText = eventEntry.location ? ` (${eventEntry.location})` : '';
 
+  const style       = eventEntry.alertStyle       || 'banner';
+  const position    = eventEntry.alertPosition    || 'top-center';
+  const durationSec = Number.isFinite(Number(eventEntry.alertDurationSec)) ? Number(eventEntry.alertDurationSec) : 18;
+
   return {
     id: crypto.randomUUID(),
-    style: 'banner',
+    style,
     message: `${eventEntry.name || 'Next event'} ${startsInText}${locationText}`,
-    position: 'top-center',
+    position,
     priority: minutesBefore <= 5 ? 'urgent' : 'normal',
-    durationSec: 18,
+    durationSec,
     trigger: 'event_auto',
     scheduledAt: null,
     countdownTo: new Date(eventEntry.startTime).toISOString(),

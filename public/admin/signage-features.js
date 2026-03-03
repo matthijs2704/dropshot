@@ -403,8 +403,11 @@ async function addScheduleEntry() {
   const location = document.getElementById('schedule-location')?.value || '';
   const startTime = _dtPairToIso('schedule-start');
   const endTime   = _dtPairToIso('schedule-end');
-  const alertMinutesBefore = _readOffsets();
+  const alertMinutesBefore   = _readOffsets();
   const countdownFromMinutes = Number(document.getElementById('schedule-countdown-from')?.value || 0);
+  const alertStyle           = document.getElementById('schedule-alert-style')?.value || 'banner';
+  const alertPosition        = document.getElementById('schedule-alert-position')?.value || 'top-center';
+  const alertDurationSec     = Number(document.getElementById('schedule-alert-duration')?.value ?? 18);
 
   if (!startTime) throw new Error('Please choose a valid start time');
   if (endTime && endTime <= startTime) throw new Error('End time must be after start time');
@@ -412,7 +415,7 @@ async function addScheduleEntry() {
   await apiFetch('/api/schedule', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, location, startTime, endTime: endTime || null, alertMinutesBefore, countdownFromMinutes }),
+    body: JSON.stringify({ name, location, startTime, endTime: endTime || null, alertMinutesBefore, countdownFromMinutes, alertStyle, alertPosition, alertDurationSec }),
   });
 
   showToast('Event added to schedule');

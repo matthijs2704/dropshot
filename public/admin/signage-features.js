@@ -185,12 +185,14 @@ function _renderSchedule(schedule) {
   }
 
   root.innerHTML = schedule.map(item => {
+    const cfm = Number(item.countdownFromMinutes || 0);
+    const countdownMeta = cfm > 0 ? ` · show next from ${cfm}min` : '';
     const endMeta = item.endTime ? ` – ${esc(_formatStart(item.endTime))}` : '';
     return `
     <div class="alert-item">
       <div class="alert-item-main">
         <div class="alert-item-msg">${esc(item.name || '(unnamed event)')}</div>
-        <div class="alert-item-meta">${esc(_formatStart(item.startTime))}${endMeta}${item.location ? ` · ${esc(item.location)}` : ''} · reminders: ${esc((item.alertMinutesBefore || []).join(', '))}</div>
+        <div class="alert-item-meta">${esc(_formatStart(item.startTime))}${endMeta}${item.location ? ` · ${esc(item.location)}` : ''} · reminders: ${esc((item.alertMinutesBefore || []).join(', '))}${esc(countdownMeta)}</div>
       </div>
       <div class="action-row">
         <button class="sc-btn sc-btn-del" data-schedule-action="delete" data-schedule-id="${esc(item.id)}">Delete</button>
@@ -383,6 +385,7 @@ async function addScheduleEntry() {
   const startTime = _inputToIso(document.getElementById('schedule-start')?.value || '');
   const endTime = _inputToIso(document.getElementById('schedule-end')?.value || '');
   const alertMinutesBefore = _readOffsets();
+  const countdownFromMinutes = Number(document.getElementById('schedule-countdown-from')?.value || 0);
 
   if (!startTime) throw new Error('Please choose a valid start time');
   if (endTime && endTime <= startTime) throw new Error('End time must be after start time');
@@ -390,7 +393,7 @@ async function addScheduleEntry() {
   await apiFetch('/api/schedule', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, location, startTime, endTime: endTime || null, alertMinutesBefore }),
+    body: JSON.stringify({ name, location, startTime, endTime: endTime || null, alertMinutesBefore, countdownFromMinutes }),
   });
 
   showToast('Event added to schedule');

@@ -444,9 +444,15 @@
               <input id="schedule-end" type="datetime-local">
             </div>
           </div>
-          <div class="field" style="margin-top:10px">
-            <label for="schedule-offsets">Alert minutes before (comma separated)</label>
-            <input id="schedule-offsets" type="text" value="15,5" placeholder="30,15,5">
+          <div class="two-col" style="margin-top:10px">
+            <div class="field">
+              <label for="schedule-offsets">Alert minutes before (comma separated)</label>
+              <input id="schedule-offsets" type="text" value="15,5" placeholder="30,15,5">
+            </div>
+            <div class="field">
+              <label for="schedule-countdown-from">Show next event countdown from (minutes, 0 = always)</label>
+              <input id="schedule-countdown-from" type="number" min="0" max="240" value="0" placeholder="30">
+            </div>
           </div>
           <div class="action-row" style="margin-top:10px">
             <button id="schedule-add" class="btn btn-primary btn-sm">Add event</button>

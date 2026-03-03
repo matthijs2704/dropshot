@@ -48,6 +48,16 @@
   /* No inset — corner accents (z-index 9000) draw over the ticker naturally */
   --ticker-inset-x:        0px;
 
+  /* ── Info bar ─────────────────────────────────────────────────────────── */
+  --infobar-bg:               rgba(26, 18, 8, 0.92);
+  --infobar-color:            #f0ddb8;
+  --infobar-height:           40px;
+  --infobar-border-top:       1px solid rgba(240, 221, 184, 0.15);
+  --infobar-clock-color:      rgba(240, 221, 184, 0.6);
+  --infobar-event-color:      #f0ddb8;
+  --infobar-countdown-color:  #ffdca8;
+  --infobar-divider-color:    rgba(240, 221, 184, 0.2);
+
   /* ── Corner bug ───────────────────────────────────────────────────────── */
   --bug-bg:          rgba(26, 18, 8, 0.82);
   --bug-radius:      5px;
@@ -78,11 +88,17 @@
   --qr-bug-offset-right:  0px;
 
   /* ── Alerts ───────────────────────────────────────────────────────────── */
-  --alert-color:          #f6e5c7;
-  --alert-banner-bg:      rgba(34, 22, 10, 0.92);
-  --alert-popup-bg:       rgba(31, 21, 11, 0.94);
-  --alert-countdown-bg:   rgba(28, 18, 8, 0.93);
-  --alert-countdown-time: #ffcf8b;
+  --alert-color:            #f6e5c7;
+  --alert-banner-bg:        rgba(34, 22, 10, 0.92);
+  --alert-popup-bg:         rgba(31, 21, 11, 0.94);
+  --alert-countdown-bg:     rgba(28, 18, 8, 0.93);
+  --alert-countdown-time:   #ffcf8b;
+  --alert-banner-border:    rgba(200, 140, 60, 0.35);
+  --alert-popup-border:     rgba(200, 140, 60, 0.4);
+  --alert-countdown-border: rgba(200, 140, 60, 0.35);
+  --alert-title-color:      #ffd490;
+  --alert-urgent-glow:      rgba(255, 160, 40, 0.55);
+  --alert-font-family:      'Lato', sans-serif;
 
   /* ── Public submit page ──────────────────────────────────────────────── */
   --submit-text-color:             #f5ead6;

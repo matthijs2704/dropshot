@@ -29,6 +29,7 @@ import {
   updateSlidesWs,
   updateSlidesConfig,
 } from '../slides/index.js';
+import { getBottomInset } from '../overlays/index.js';
 
 // Display state shared with heartbeat
 export const displayState = {
@@ -50,7 +51,7 @@ let _recentTemplates = [];
 let _cycleTimer      = null;
 let _running         = false;
 let _photoCycleCount = 0;   // counts photo layouts since last slide interleave
-let _lastSubmissionWallAt = 0;
+let _lastSubmissionWallAt = Date.now();
 
 /**
  * Initialise the cycle engine.
@@ -146,7 +147,7 @@ async function runCycle() {
 
   const cycleStart = Date.now();
   const submissionMode = _globalConfig?.submissionDisplayMode || 'off';
-  const wallOptions = getSubmissionWallOptions();
+    const wallOptions = { ...getSubmissionWallOptions(), bottomInset: getBottomInset() };
   const hasSubmissions = hasApprovedSubmissions();
   const hideWhenEmpty = wallOptions.hideWhenEmpty !== false;
   const submissionsEnabled = submissionMode !== 'off' && (hasSubmissions || !hideWhenEmpty);
@@ -191,10 +192,12 @@ async function runCycle() {
 
   // --- Social wall submissions ---
   if (layoutType === 'submissionwall') {
-    const gridCount = Math.max(3, Math.min(12, Number(_globalConfig?.submissionGridCount || 6)));
     const mode = submissionMode === 'off' ? 'both' : submissionMode;
-    const count = mode === 'single' ? 1 : gridCount;
-    const items = hasSubmissions ? pickSubmissionWindow(count, Math.max(18, gridCount * 4)) : [];
+    // Fetch up to 4 pages worth of items so the wall can page through them;
+    // single mode still fetches just 1.
+    const pageSize = 6;
+    const count = mode === 'single' ? 1 : pageSize * 4;
+    const items = hasSubmissions ? pickSubmissionWindow(count, Math.max(24, pageSize * 8)) : [];
 
     if (items.length || !hideWhenEmpty) {
       const effectiveMode = items.length ? mode : 'single';

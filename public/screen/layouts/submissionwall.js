@@ -1,5 +1,7 @@
-// Social wall layout for approved attendee submissions.
-// Designed as a contained, animated polaroid wall that never overflows screen bounds.
+// Social wall layout — polaroid-card style.
+// Cards have a fixed intrinsic size and are centred on the background;
+// they never stretch to fill a cell. Pages crossfade when there are more
+// submissions than fit on one screen.
 
 let _styleInjected = false;
 
@@ -13,10 +15,10 @@ function _ensureStyle() {
     .sw-layout {
       position: absolute;
       inset: 0;
-      padding-top: var(--screen-padding-top, var(--screen-padding, 0px));
-      padding-right: var(--screen-padding-right, var(--screen-padding, 0px));
+      padding-top:    var(--screen-padding-top,    var(--screen-padding, 0px));
+      padding-right:  var(--screen-padding-right,  var(--screen-padding, 0px));
       padding-bottom: var(--screen-padding-bottom, var(--screen-padding, 0px));
-      padding-left: var(--screen-padding-left, var(--screen-padding, 0px));
+      padding-left:   var(--screen-padding-left,   var(--screen-padding, 0px));
       background:
         radial-gradient(110% 80% at 50% 0%, rgba(255, 255, 255, 0.08), transparent 60%),
         linear-gradient(165deg, rgba(0,0,0,0.18), rgba(0,0,0,0.05) 46%, transparent 72%),
@@ -37,97 +39,117 @@ function _ensureStyle() {
       z-index: 0;
     }
 
-    .sw-shell {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      padding: clamp(14px, 1.8vw, 30px);
+    /* ── Page ────────────────────────────────────────────────────────────── */
+
+    .sw-page {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: var(--sw-gap);
+      padding: var(--sw-pad);
       z-index: 1;
     }
 
-    .sw-grid {
-      width: 100%;
-      height: 100%;
-      display: grid;
-      gap: clamp(10px, 1.2vw, 18px);
-      align-content: center;
-      justify-content: center;
+    .sw-page.sw-page-enter {
+      animation: sw-page-in 600ms cubic-bezier(0.22, 0.9, 0.28, 1) both;
     }
 
-    .sw-single-wrap {
-      width: 100%;
-      height: 100%;
+    .sw-page.sw-page-exit {
+      animation: sw-page-out 380ms cubic-bezier(0.4, 0, 1, 0.8) both;
+    }
+
+    @keyframes sw-page-in {
+      from { opacity: 0; transform: translateY(24px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0)    scale(1); }
+    }
+
+    @keyframes sw-page-out {
+      from { opacity: 1; transform: translateY(0)      scale(1); }
+      to   { opacity: 0; transform: translateY(-18px)  scale(0.97); }
+    }
+
+    /* ── Row ─────────────────────────────────────────────────────────────── */
+
+    .sw-row {
       display: flex;
-      align-items: center;
+      flex-direction: row;
+      align-items: flex-start;
       justify-content: center;
-      padding: clamp(8px, 1vw, 16px);
+      gap: var(--sw-gap);
     }
 
+    /* ── Card ────────────────────────────────────────────────────────────── */
+
+    /* Cards are sized by CSS custom properties set inline by JS */
     .sw-card {
+      flex: none;              /* never stretch */
+      width:  var(--sw-card-w);
       background: var(--polaroid-card-bg, #fffef8);
-      border-radius: var(--polaroid-card-radius, 10px);
-      box-shadow: var(--polaroid-card-shadow, 0 20px 48px rgba(0,0,0,0.5), 0 6px 16px rgba(0,0,0,0.3));
+      border-radius: var(--polaroid-card-radius, 8px);
+      box-shadow: var(--polaroid-card-shadow,
+        0 18px 44px rgba(0,0,0,0.55),
+        0 5px 14px rgba(0,0,0,0.32));
       display: flex;
       flex-direction: column;
-      gap: clamp(6px, 0.7vw, 10px);
-      padding: clamp(8px, 0.8vw, 12px) clamp(8px, 0.8vw, 12px) clamp(12px, 1vw, 16px);
-      min-width: 0;
-      min-height: 0;
       overflow: hidden;
       transform: rotate(var(--sw-rot, 0deg));
-      animation: sw-card-enter 500ms cubic-bezier(0.2, 0.85, 0.25, 1) var(--sw-delay, 0ms) both;
+      animation: sw-card-in var(--sw-card-dur, 480ms) cubic-bezier(0.22, 0.9, 0.28, 1) var(--sw-delay, 0ms) both;
     }
 
-    .sw-grid .sw-card {
-      width: 100%;
-      height: 100%;
+    @keyframes sw-card-in {
+      from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.93) rotate(var(--sw-rot, 0deg));
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1) rotate(var(--sw-rot, 0deg));
+      }
     }
 
-    .sw-single-wrap .sw-card {
-      width: min(68vw, 1120px);
-      max-height: 88vh;
-      transform: rotate(-0.8deg);
+    /* ── Photo area ──────────────────────────────────────────────────────── */
+
+    .sw-photo-wrap {
+      flex-shrink: 0;
+      overflow: hidden;
+      border-radius: 4px;
+      /* margin set inline: border on all sides except bottom */
     }
 
     .sw-photo {
       width: 100%;
-      aspect-ratio: 4 / 3;
-      border-radius: 6px;
+      height: 100%;
       object-fit: cover;
-      background: #111;
+      object-position: center;
+      display: block;
+    }
+
+    /* ── Bottom strip (polaroid footer) ─────────────────────────────────── */
+
+    .sw-footer {
       flex-shrink: 0;
-    }
-
-    .sw-single-wrap .sw-photo {
-      max-height: min(58vh, 720px);
-    }
-
-    .sw-copy {
       display: flex;
       flex-direction: column;
-      gap: 4px;
-      min-height: 0;
+      justify-content: center;
+      /* padding / min-height set inline */
     }
+
+    /* ── Message (text-only: fills the footer) ───────────────────────────── */
 
     .sw-message {
       color: var(--submission-wall-message-color, #2e2317);
-      font-family: var(--submission-wall-message-font, var(--submission-font-family, 'Georgia', 'Times New Roman', serif));
+      font-family: var(--submission-wall-message-font,
+        var(--submission-font-family, 'Georgia', 'Times New Roman', serif));
       font-weight: 700;
       line-height: 1.22;
       overflow: hidden;
       display: -webkit-box;
       -webkit-box-orient: vertical;
       -webkit-line-clamp: var(--sw-lines, 3);
-    }
-
-    .sw-grid .sw-message {
-      font-size: clamp(14px, 1.5vw, 26px);
-      --sw-lines: 3;
-    }
-
-    .sw-single-wrap .sw-message {
-      font-size: clamp(24px, 3.1vw, 52px);
-      --sw-lines: 4;
+      /* font-size set inline */
     }
 
     .sw-meta {
@@ -135,33 +157,43 @@ function _ensureStyle() {
       font-family: var(--submission-wall-meta-font, 'Segoe UI', system-ui, sans-serif);
       font-weight: 600;
       letter-spacing: 0.02em;
-      opacity: 0.92;
+      opacity: 0.82;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      margin-top: 3px;
+      /* font-size set inline */
     }
 
-    .sw-grid .sw-meta {
-      font-size: clamp(11px, 1.02vw, 14px);
+    /* ── Quote mark ──────────────────────────────────────────────────────── */
+
+    .sw-quote-mark {
+      display: block;
+      color: var(--submission-wall-message-color, #2e2317);
+      font-family: var(--submission-wall-message-font, Georgia, serif);
+      line-height: 0.7;
+      opacity: 0.15;
+      user-select: none;
+      /* font-size set inline */
     }
 
-    .sw-single-wrap .sw-meta {
-      font-size: clamp(13px, 1.3vw, 20px);
-    }
+    /* ── Empty state ─────────────────────────────────────────────────────── */
 
     .sw-empty {
       width: min(62vw, 920px);
       padding: clamp(18px, 2.2vw, 34px);
       border-radius: 14px;
       background: var(--polaroid-card-bg, #fffef8);
-      box-shadow: var(--polaroid-card-shadow, 0 20px 48px rgba(0,0,0,0.5), 0 6px 16px rgba(0,0,0,0.3));
+      box-shadow: var(--polaroid-card-shadow,
+        0 20px 48px rgba(0,0,0,0.5), 0 6px 16px rgba(0,0,0,0.3));
       text-align: center;
-      animation: sw-card-enter 540ms cubic-bezier(0.2, 0.85, 0.25, 1) both;
+      animation: sw-card-in 540ms cubic-bezier(0.22, 0.9, 0.28, 1) both;
     }
 
     .sw-empty-title {
       color: var(--submission-wall-message-color, #2e2317);
-      font-family: var(--submission-wall-message-font, var(--submission-font-family, 'Georgia', 'Times New Roman', serif));
+      font-family: var(--submission-wall-message-font,
+        var(--submission-font-family, 'Georgia', 'Times New Roman', serif));
       font-size: clamp(34px, 4.2vw, 68px);
       line-height: 1.06;
       font-weight: 800;
@@ -175,6 +207,8 @@ function _ensureStyle() {
       font-weight: 600;
       line-height: 1.25;
     }
+
+    /* ── QR bug ──────────────────────────────────────────────────────────── */
 
     .sw-qr {
       position: absolute;
@@ -190,7 +224,7 @@ function _ensureStyle() {
       align-items: center;
       gap: 4px;
       box-shadow: 0 8px 18px rgba(0,0,0,0.36);
-      animation: sw-card-enter 420ms cubic-bezier(0.2, 0.85, 0.25, 1) 160ms both;
+      animation: sw-card-in 420ms cubic-bezier(0.22, 0.9, 0.28, 1) 160ms both;
     }
 
     .sw-qr img {
@@ -208,59 +242,212 @@ function _ensureStyle() {
       text-transform: uppercase;
       opacity: 0.93;
     }
-
-    @keyframes sw-card-enter {
-      from {
-        opacity: 0;
-        transform: translateY(18px) scale(0.94) rotate(var(--sw-rot, 0deg));
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0) scale(1) rotate(var(--sw-rot, 0deg));
-      }
-    }
   `;
 
   document.head.appendChild(style);
 }
 
-function _buildCard(item, isSingle) {
+/* ── Sizing maths ─────────────────────────────────────────────────────── */
+
+// PAGE_SIZE caps how many cards go on one page.
+const PAGE_SIZE     = 6;
+const PAGE_DWELL_MS = 6000;
+const PAGE_EXIT_MS  = 380;
+
+/**
+ * Compute card dimensions based on how many cards appear on the page.
+ *
+ * Returns pixel values derived from the viewport so cards always fit
+ * without scrolling but retain natural polaroid proportions.
+ *
+ * Layout is always arranged as rows of at most 3 cards:
+ *   1 → [1]   (hero, single centred card — wider)
+ *   2 → [2]
+ *   3 → [3]
+ *   4 → [2,2]
+ *   5 → [3,2]
+ *   6 → [3,3]
+ */
+function _sizing(n, bottomInset) {
+  const vw = window.innerWidth  || 1920;
+  const vh = window.innerHeight || 1080;
+  const usableH = vh - (bottomInset || 0);
+
+  const cols = n === 1 ? 1 : n <= 3 ? n : 3;
+  const rows = n === 1 ? 1 : n <= 3 ? 1 : Math.ceil(n / 3);
+
+  // Gaps and padding in px
+  const pad  = Math.round(Math.min(vw * 0.022, 32));
+  const gap  = Math.round(Math.min(vw * 0.016, 22));
+
+  // Available space
+  const availW = vw - pad * 2 - gap * (cols - 1);
+  const availH = usableH - pad * 2 - gap * (rows - 1);
+
+  // Card width derived from horizontal space
+  const cardW = Math.floor(availW / cols);
+
+  // Photo square inside the card (polaroid style: equal-sided)
+  // Border = 4% of card width, minimum 6px
+  const border = Math.max(6, Math.round(cardW * 0.04));
+
+  // Photo size: square, fills card width inside borders
+  const photoSize = cardW - border * 2;
+
+  // Footer height: a generous white strip below the photo
+  // Hero gets a taller footer for bigger text; grid cards get a compact one
+  const footerH = n === 1
+    ? Math.round(cardW * 0.22)
+    : Math.round(cardW * 0.28);
+
+  // Total card height
+  const cardH = border + photoSize + footerH; // no bottom border — footer is the bottom
+
+  // Check that the grid actually fits vertically; scale down if needed
+  const totalH = cardH * rows + gap * (rows - 1) + pad * 2;
+  const scale  = totalH > usableH ? (usableH - pad * 2 - gap * (rows - 1)) / (cardH * rows) : 1;
+  const finalCardW = Math.floor(cardW  * scale);
+  const finalCardH = Math.floor(cardH  * scale);
+  const finalBorder = Math.max(5, Math.round(border * scale));
+  const finalPhoto = finalCardW - finalBorder * 2;
+  const finalFooter = finalCardH - finalBorder - finalPhoto;
+
+  // Font sizes relative to card width
+  const msgSize  = n === 1
+    ? Math.round(finalCardW * 0.055)   // hero: big
+    : Math.round(finalCardW * 0.072);  // grid: fill the footer
+  const metaSize = Math.round(msgSize * 0.62);
+  const quoteSize = Math.round(msgSize * 1.8);
+
+  return {
+    cols, rows, pad, gap,
+    cardW: finalCardW, cardH: finalCardH,
+    border: finalBorder,
+    photoSize: finalPhoto,
+    footerH: finalFooter,
+    msgSize, metaSize, quoteSize,
+  };
+}
+
+/* ── Row layout helper ────────────────────────────────────────────────── */
+
+/** Array of row lengths for n cards in a max-3 grid. */
+function _rowSizes(n) {
+  if (n <= 3) return [n];
+  if (n === 4) return [2, 2];
+  if (n === 5) return [3, 2];
+  return [3, 3]; // 6
+}
+
+/* ── Card builder ─────────────────────────────────────────────────────── */
+
+function _buildCard(item, sz, delayMs, isHero) {
+  const hasPhoto   = !!(item.photoThumbUrl || item.photoUrl);
+  const msgText    = String(item.message || '').trim();
+  const metaText   = item.submitterValue ? `— ${item.submitterValue}` : '';
+
   const card = document.createElement('article');
   card.className = 'sw-card';
+  card.style.setProperty('--sw-rot',    `${(Math.random() * 3.2 - 1.6).toFixed(2)}deg`);
+  card.style.setProperty('--sw-delay',  `${delayMs}ms`);
+  card.style.setProperty('--sw-card-w', `${sz.cardW}px`);
+  if (isHero) card.style.setProperty('--sw-rot', `${(Math.random() * 1.4 - 0.7).toFixed(2)}deg`);
 
-  if (item.photoThumbUrl || item.photoUrl) {
+  if (hasPhoto) {
+    // Photo area — square, with polaroid border on sides and top
+    const wrap = document.createElement('div');
+    wrap.className = 'sw-photo-wrap';
+    wrap.style.cssText = [
+      `width:${sz.photoSize}px;`,
+      `height:${sz.photoSize}px;`,
+      `margin:${sz.border}px ${sz.border}px 0 ${sz.border}px;`,
+    ].join('');
+
     const img = document.createElement('img');
     img.className = 'sw-photo';
-    img.src = item.photoUrl || item.photoThumbUrl;
+    img.src = item.photoThumbUrl || item.photoUrl;
     img.alt = '';
-    card.appendChild(img);
+    wrap.appendChild(img);
+    card.appendChild(wrap);
   }
 
-  const copy = document.createElement('div');
-  copy.className = 'sw-copy';
+  // Footer / copy area
+  const footer = document.createElement('div');
+  footer.className = 'sw-footer';
+  footer.style.cssText = [
+    `min-height:${sz.footerH}px;`,
+    `padding:${Math.round(sz.footerH * 0.12)}px ${sz.border}px ${Math.round(sz.footerH * 0.14)}px;`,
+  ].join('');
 
-  const messageText = String(item.message || '').trim();
-  if (messageText) {
-    const message = document.createElement('div');
-    message.className = 'sw-message';
-    message.textContent = messageText;
-    copy.appendChild(message);
+  if (!hasPhoto && msgText) {
+    // Text-only card: decorative quote mark above message
+    const qm = document.createElement('span');
+    qm.className = 'sw-quote-mark';
+    qm.textContent = '\u201C';
+    qm.style.fontSize = `${sz.quoteSize}px`;
+    footer.appendChild(qm);
   }
 
-  const meta = document.createElement('div');
-  meta.className = 'sw-meta';
-  meta.textContent = item.submitterValue ? `from ${item.submitterValue}` : (isSingle ? 'approved submission' : 'event submission');
-  copy.appendChild(meta);
+  if (msgText) {
+    const msg = document.createElement('div');
+    msg.className = 'sw-message';
+    msg.textContent = msgText;
+    msg.style.fontSize = `${sz.msgSize}px`;
+    // Text-only: allow more lines in the tall footer
+    msg.style.setProperty('--sw-lines', hasPhoto ? '2' : '5');
+    footer.appendChild(msg);
+  }
 
-  card.appendChild(copy);
+  if (metaText) {
+    const meta = document.createElement('div');
+    meta.className = 'sw-meta';
+    meta.textContent = metaText;
+    meta.style.fontSize = `${sz.metaSize}px`;
+    footer.appendChild(meta);
+  }
+
+  card.appendChild(footer);
   return card;
 }
 
+/* ── Page builder ─────────────────────────────────────────────────────── */
+
+function _buildPage(items, entering, bottomInset) {
+  const n    = items.length;
+  const sz   = _sizing(n, bottomInset);
+  const rows = _rowSizes(n);
+
+  const page = document.createElement('div');
+  page.className = 'sw-page' + (entering ? ' sw-page-enter' : '');
+  page.style.setProperty('--sw-gap', `${sz.gap}px`);
+  page.style.setProperty('--sw-pad', `${sz.pad}px`);
+
+  const isHero = n === 1;
+  let cursor = 0;
+  rows.forEach((rowLen, rowIdx) => {
+    const row = document.createElement('div');
+    row.className = 'sw-row';
+    for (let i = 0; i < rowLen; i++) {
+      const delay = (rowIdx * 3 + i) * 70;
+      const card  = _buildCard(items[cursor++], sz, delay, isHero);
+      row.appendChild(card);
+    }
+    page.appendChild(row);
+  });
+
+  return page;
+}
+
+/* ── QR bug ───────────────────────────────────────────────────────────── */
+
 function _appendQr(shell, options = {}) {
   if (!options.showQr || !options.qrImageUrl) return;
+  const bottomInset = Number(options.bottomInset) || 0;
+  const baseBottom  = Math.max(12, Math.round(window.innerHeight * 0.018));
 
   const qr = document.createElement('div');
   qr.className = 'sw-qr';
+  qr.style.bottom = `${baseBottom + bottomInset}px`;
 
   const img = document.createElement('img');
   img.src = options.qrImageUrl;
@@ -275,12 +462,66 @@ function _appendQr(shell, options = {}) {
   shell.appendChild(qr);
 }
 
-function _buildSingle(shell, items) {
-  const wrap = document.createElement('div');
-  wrap.className = 'sw-single-wrap';
+/* ── Page rotation ────────────────────────────────────────────────────── */
 
-  const item = items[0];
-  if (!item) {
+function _startPaging(shell, pageChunks, firstPage, bottomInset) {
+  if (pageChunks.length <= 1) return () => {};
+
+  let current   = firstPage;
+  let pageIndex = 0;
+  let timer     = null;
+
+  function advance() {
+    if (!shell.isConnected) return;
+
+    pageIndex = (pageIndex + 1) % pageChunks.length;
+    const next = _buildPage(pageChunks[pageIndex], false, bottomInset);
+
+    current.classList.remove('sw-page-enter');
+    current.classList.add('sw-page-exit');
+
+    timer = setTimeout(() => {
+      if (!shell.isConnected) return;
+      current.remove();
+      next.classList.add('sw-page-enter');
+      const qrEl = shell.querySelector('.sw-qr');
+      qrEl ? shell.insertBefore(next, qrEl) : shell.appendChild(next);
+      current = next;
+      timer = setTimeout(advance, PAGE_DWELL_MS);
+    }, PAGE_EXIT_MS);
+  }
+
+  timer = setTimeout(advance, PAGE_DWELL_MS);
+  return () => clearTimeout(timer);
+}
+
+/* ── Public API ───────────────────────────────────────────────────────── */
+
+/**
+ * @param {Array}  items
+ * @param {string} mode   'single' | 'grid' | 'both'
+ * @param {{ showQr?: boolean, qrImageUrl?: string, bottomInset?: number }} options
+ */
+export function buildSubmissionWall(items, mode = 'both', options = {}) {
+  _ensureStyle();
+
+  const list        = Array.isArray(items) ? items : [];
+  const bottomInset = Number(options.bottomInset) || 0;
+
+  const el = document.createElement('div');
+  el.className = 'layout sw-layout';
+  if (bottomInset > 0) el.style.paddingBottom = `${bottomInset}px`;
+
+  const shell = document.createElement('div');
+  shell.className = 'sw-shell';
+  shell.style.cssText = 'position:relative;width:100%;height:100%;';
+  el.appendChild(shell);
+
+  // Empty state
+  if (!list.length) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:1;';
+
     const empty = document.createElement('div');
     empty.className = 'sw-empty';
 
@@ -296,66 +537,47 @@ function _buildSingle(shell, items) {
 
     wrap.appendChild(empty);
     shell.appendChild(wrap);
-    return;
+    _appendQr(shell, options);
+    return { el, visibleIds: [], startMotion: () => {} };
   }
 
-  const card = _buildCard(item, true);
-  card.style.setProperty('--sw-rot', '-0.8deg');
-  card.style.setProperty('--sw-delay', '0ms');
-  wrap.appendChild(card);
-  shell.appendChild(wrap);
-}
-
-function _buildGrid(shell, items) {
-  const grid = document.createElement('div');
-  grid.className = 'sw-grid';
-
-  const total = items.length;
-  const cols = total <= 2 ? 2 : total <= 4 ? 2 : total <= 8 ? 3 : 4;
-  grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
-
-  items.forEach((item, index) => {
-    const card = _buildCard(item, false);
-    const rot = (Math.random() * 3.2 - 1.6).toFixed(2);
-    card.style.setProperty('--sw-rot', `${rot}deg`);
-    card.style.setProperty('--sw-delay', `${index * 80}ms`);
-    grid.appendChild(card);
-  });
-
-  shell.appendChild(grid);
-}
-
-/**
- * @param {Array} items
- * @param {'single'|'grid'|'both'} mode
- * @param {{ showQr?: boolean, qrImageUrl?: string }} options
- */
-export function buildSubmissionWall(items, mode = 'both', options = {}) {
-  _ensureStyle();
-
-  const list = Array.isArray(items) ? items : [];
-  const el = document.createElement('div');
-  el.className = 'layout sw-layout';
-
-  const shell = document.createElement('div');
-  shell.className = 'sw-shell';
-  el.appendChild(shell);
-
-  const wallMode = mode === 'both'
-    ? (list.length >= 5 ? 'grid' : (Math.random() < 0.5 ? 'single' : 'grid'))
+  // Effective mode
+  const effectiveMode = mode === 'both'
+    ? (list.length === 1 ? 'single' : 'grid')
     : mode;
 
-  if (!list.length || wallMode === 'single') {
-    _buildSingle(shell, list);
-  } else {
-    _buildGrid(shell, list);
+  // Single / hero
+  if (effectiveMode === 'single' || list.length === 1) {
+    const page = _buildPage([list[0]], true, bottomInset);
+    shell.appendChild(page);
+    _appendQr(shell, options);
+    return {
+      el,
+      visibleIds: [`submission:${list[0].id}`],
+      startMotion: () => {},
+    };
   }
 
+  // Grid with optional paging
+  const pageChunks = [];
+  for (let i = 0; i < list.length; i += PAGE_SIZE) {
+    pageChunks.push(list.slice(i, i + PAGE_SIZE));
+  }
+
+  const firstPage = _buildPage(pageChunks[0], true, bottomInset);
+  shell.appendChild(firstPage);
   _appendQr(shell, options);
+
+  let _stopPaging = () => {};
 
   return {
     el,
-    visibleIds: list.map(item => `submission:${item.id}`),
-    startMotion: () => {},
+    visibleIds: list.map(i => `submission:${i.id}`),
+    startMotion() {
+      _stopPaging = _startPaging(shell, pageChunks, firstPage, bottomInset);
+    },
+    destroy() {
+      _stopPaging();
+    },
   };
 }

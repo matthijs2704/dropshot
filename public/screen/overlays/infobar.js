@@ -1,0 +1,608 @@
+// Overlay: unified info bar — bottom strip with clock, event/countdown, and ticker.
+//
+// Layout (left → right, slots hide when disabled/empty):
+//   [HH:MM]  |  Event Name · 04:32  |  ▶ scrolling ticker text…
+//
+// The bar sits at position:fixed bottom:0, z-index 9100 — above theme frames
+// (camp frame is z-index 9000/9001) but below alerts (z-index 9500).
+//
+// Themeable via CSS custom properties; all have sensible fallbacks.
+
+let _barEl       = null;
+let _clockEl     = null;
+let _eventEl     = null;
+let _eventNameEl = null;
+let _eventTimeEl = null;
+let _tickerEl    = null;
+let _tickerInner = null;
+
+let _clockTimer      = null;
+let _countdownTimer  = null;
+
+// Last-rendered event slot state — used to detect meaningful changes for fade transition
+let _eventSlotLast = { name: null, timeVisible: null, visible: null };
+let _tickerFrame     = null;
+
+let _cfg      = {};
+let _schedule = [];   // sorted upcoming events from server
+let _alert    = null; // active bottom-bar countdown alert (overrides schedule)
+let _tickerPos   = 0;
+let _tickerSpeed = 60;
+let _tickerLast  = null;
+// Fade-mode ticker state
+let _tickerMessages = [];
+let _tickerMsgIndex = 0;
+let _tickerDwellMs  = 5000;
+let _tickerFadeTimer = null;
+
+// ---------------------------------------------------------------------------
+// Style injection
+// ---------------------------------------------------------------------------
+
+let _styleInjected = false;
+
+function _ensureStyle() {
+  if (_styleInjected) return;
+  _styleInjected = true;
+
+  const style = document.createElement('style');
+  style.id = 'overlay-infobar-style';
+  style.textContent = `
+    #overlay-infobar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: var(--infobar-height, 40px);
+      background: var(--infobar-bg, rgba(0, 0, 0, 0.82));
+      border-top: var(--infobar-border-top, 1px solid rgba(255, 255, 255, 0.1));
+      color: var(--infobar-color, #ffffff);
+      font-family: var(--infobar-font-family, var(--ticker-font-family, 'Segoe UI', system-ui, sans-serif));
+      font-size: var(--infobar-font-size, 15px);
+      font-weight: 600;
+      letter-spacing: var(--infobar-letter-spacing, 0.03em);
+      z-index: 9100;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    /* ── Clock slot ─────────────────────────────────────────────────────── */
+
+    #overlay-infobar-clock {
+      flex-shrink: 0;
+      padding: 0 14px;
+      color: var(--infobar-clock-color, rgba(255, 255, 255, 0.7));
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    /* ── Divider between slots ──────────────────────────────────────────── */
+
+    .infobar-divider {
+      flex-shrink: 0;
+      width: 1px;
+      height: 55%;
+      background: var(--infobar-divider-color, rgba(255, 255, 255, 0.18));
+    }
+
+    /* ── Event slot ─────────────────────────────────────────────────────── */
+
+    #overlay-infobar-event {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 16px;
+      max-width: 55%;
+      overflow: hidden;
+      white-space: nowrap;
+      transition: opacity 0.35s ease;
+    }
+
+    #overlay-infobar-event-name {
+      color: var(--infobar-event-color, #ffffff);
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #overlay-infobar-event-time {
+      flex-shrink: 0;
+      font-variant-numeric: tabular-nums;
+      color: var(--infobar-countdown-color, #ffdca8);
+      font-weight: 800;
+      font-size: var(--infobar-countdown-size, 1em);
+    }
+
+    /* ── Ticker slot ────────────────────────────────────────────────────── */
+
+    #overlay-infobar-ticker {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+    }
+
+    #overlay-infobar-ticker-inner {
+      white-space: nowrap;
+      will-change: transform;
+      color: var(--infobar-ticker-color, var(--ticker-color, #ffffff));
+      font-size: var(--infobar-ticker-font-size, var(--ticker-font-size, 15px));
+      font-weight: var(--infobar-ticker-font-weight, var(--ticker-font-weight, 600));
+      letter-spacing: var(--infobar-ticker-letter-spacing, var(--ticker-letter-spacing, 0.03em));
+      transition: opacity 0.5s ease;
+    }
+
+    /* Entry animation */
+    #overlay-infobar {
+      animation: infobar-in 300ms ease forwards;
+    }
+    @keyframes infobar-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// ---------------------------------------------------------------------------
+// Clock
+// ---------------------------------------------------------------------------
+
+function _formatClock() {
+  return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function _startClock() {
+  if (_clockTimer) return;
+  if (_clockEl) _clockEl.textContent = _formatClock();
+  // Align tick to next minute boundary for clean transitions
+  const now = new Date();
+  const msToNextMin = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
+  setTimeout(() => {
+    if (_clockEl) _clockEl.textContent = _formatClock();
+    _clockTimer = setInterval(() => {
+      if (_clockEl) _clockEl.textContent = _formatClock();
+    }, 60_000);
+  }, msToNextMin + 50);
+}
+
+function _stopClock() {
+  if (_clockTimer) { clearInterval(_clockTimer); _clockTimer = null; }
+}
+
+// ---------------------------------------------------------------------------
+// Event / countdown slot
+// ---------------------------------------------------------------------------
+
+function _formatDuration(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const pad = n => String(n).padStart(2, '0');
+  if (h > 0) return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  return `${pad(m)}:${pad(s)}`;
+}
+
+// Resolve what to show in the event slot.
+// Priority: explicit alert → current event (if enabled) → next event (if enabled).
+// "Current" = most recent schedule entry whose startTime is in the past and whose
+//             endTime (if set) has not yet passed.
+// "Next"    = soonest schedule entry whose startTime is in the future.
+function _resolveEventSlot() {
+  if (_alert) {
+    const target = Number(new Date(_alert.countdownTo || ''));
+    const remaining = Number.isFinite(target) ? target - Date.now() : null;
+    return {
+      name: _alert.message || '',
+      remaining,
+      targetMs: target,
+      kind: 'alert',
+    };
+  }
+
+  const now = Date.now();
+  const sorted = _schedule
+    .map(e => ({ e, startMs: Number(new Date(e.startTime)) }))
+    .filter(({ startMs }) => Number.isFinite(startMs))
+    .sort((a, b) => a.startMs - b.startMs);
+
+  const showCurrent = _cfg.infoBarShowCurrentEvent !== false;
+  const showNext    = _cfg.infoBarShowNextEvent    !== false;
+
+  // Current: most recent entry that has already started and has not ended
+  if (showCurrent) {
+    const past = sorted.filter(({ startMs }) => startMs <= now);
+    // Walk from most recent backwards, skip entries whose endTime has passed
+    for (let i = past.length - 1; i >= 0; i--) {
+      const { e } = past[i];
+      if (e.endTime) {
+        const endMs = Number(new Date(e.endTime));
+        if (Number.isFinite(endMs) && endMs <= now) continue; // already ended
+      }
+      const name = e.name || '';
+      const loc  = e.location ? ` · ${e.location}` : '';
+      return { name: name + loc, remaining: null, targetMs: null, kind: 'current' };
+    }
+  }
+
+  // Next: soonest upcoming entry
+  if (showNext) {
+    const future = sorted.filter(({ startMs }) => startMs > now);
+    if (future.length) {
+      const { e, startMs } = future[0];
+      // If countdownFromMinutes is set, only show once inside the countdown window
+      const cfm = Number(e.countdownFromMinutes || 0);
+      if (cfm > 0 && now < startMs - (cfm * 60 * 1000)) return null;
+      const name = e.name || '';
+      const loc  = e.location ? ` · ${e.location}` : '';
+      return { name: name + loc, remaining: startMs - now, targetMs: startMs, kind: 'next' };
+    }
+  }
+
+  return null;
+}
+
+function _applyEventSlot(slot) {
+  if (!slot) {
+    _eventEl.style.display = 'none';
+    _updateDividers();
+    return;
+  }
+
+  _eventEl.style.display = '';
+  if (_eventNameEl) _eventNameEl.textContent = slot.name;
+
+  if (_eventTimeEl) {
+    if (slot.remaining !== null && Number.isFinite(slot.remaining) && slot.remaining > 0) {
+      _eventTimeEl.textContent = `over ${_formatDuration(slot.remaining)}`;
+      _eventTimeEl.style.display = '';
+    } else {
+      _eventTimeEl.style.display = 'none';
+    }
+  }
+
+  _updateDividers();
+}
+
+function _refreshEventSlot() {
+  if (!_eventEl) return;
+  const showCurrent = _cfg.infoBarShowCurrentEvent !== false;
+  const showNext    = _cfg.infoBarShowNextEvent    !== false;
+  if (!showCurrent && !showNext) {
+    _eventEl.style.display = 'none';
+    return;
+  }
+
+  const slot = _resolveEventSlot();
+
+  // Detect whether the visible content has meaningfully changed
+  const newName        = slot ? slot.name : null;
+  const newTimeVisible = slot ? (slot.remaining !== null && Number.isFinite(slot.remaining) && slot.remaining > 0) : null;
+  const newVisible     = slot !== null;
+
+  const changed = newVisible     !== _eventSlotLast.visible
+               || newName        !== _eventSlotLast.name
+               || newTimeVisible !== _eventSlotLast.timeVisible;
+
+  if (!changed) {
+    // Only the countdown number ticked — update it in place without fading
+    if (slot && _eventTimeEl && newTimeVisible) {
+      _eventTimeEl.textContent = `over ${_formatDuration(slot.remaining)}`;
+    }
+    return;
+  }
+
+  // Meaningful change — fade out, swap content, fade in
+  _eventSlotLast = { name: newName, timeVisible: newTimeVisible, visible: newVisible };
+
+  if (_eventEl.style.display === 'none' || _eventEl.style.opacity === '0') {
+    // Slot was hidden — apply immediately then fade in
+    _applyEventSlot(slot);
+    _eventEl.style.opacity = '0';
+    requestAnimationFrame(() => { _eventEl.style.opacity = '1'; });
+  } else {
+    _eventEl.style.opacity = '0';
+    setTimeout(() => {
+      _applyEventSlot(slot);
+      _eventEl.style.opacity = '1';
+    }, 370);
+  }
+}
+
+function _startCountdownTimer() {
+  if (_countdownTimer) return;
+  _countdownTimer = setInterval(() => {
+    _refreshEventSlot();
+    // Auto-clear alert when its countdown target passes
+    if (_alert?.countdownTo) {
+      const target = Number(new Date(_alert.countdownTo));
+      if (Number.isFinite(target) && target <= Date.now()) {
+        _alert = null;
+      }
+    }
+  }, 500);
+}
+
+function _stopCountdownTimer() {
+  if (_countdownTimer) { clearInterval(_countdownTimer); _countdownTimer = null; }
+}
+
+// ---------------------------------------------------------------------------
+// Ticker animation
+// ---------------------------------------------------------------------------
+
+function _startTickerScroll() {
+  if (!_tickerInner) return;
+  _tickerPos  = 0;
+  _tickerLast = null;
+
+  function step(ts) {
+    if (_tickerLast !== null) {
+      const dt = (ts - _tickerLast) / 1000;
+      _tickerPos += _tickerSpeed * dt;
+      if (_tickerPos > _tickerInner.scrollWidth) _tickerPos = -window.innerWidth;
+      _tickerInner.style.transform = `translateX(${-_tickerPos}px)`;
+    }
+    _tickerLast  = ts;
+    _tickerFrame = requestAnimationFrame(step);
+  }
+
+  if (_tickerFrame) cancelAnimationFrame(_tickerFrame);
+  _tickerFrame = requestAnimationFrame(step);
+}
+
+// Map tickerAlign → padding string for inner element in fade mode
+function _tickerFadePadding(align) {
+  if (align === 'center') return '0 16px';
+  if (align === 'end')    return '0 16px 0 0';
+  return '0 0 0 16px'; // start
+}
+
+function _startTickerFade() {
+  if (!_tickerInner || !_tickerMessages.length) return;
+
+  const align   = _cfg.tickerAlign || 'start';
+  const padding = _tickerFadePadding(align);
+
+  _tickerInner.style.transform = 'none';
+  _tickerInner.style.padding   = padding;
+
+  function showNext() {
+    if (!_tickerInner) return;
+    _tickerInner.style.opacity = '0';
+    setTimeout(() => {
+      if (!_tickerInner) return;
+      _tickerInner.textContent = _tickerMessages[_tickerMsgIndex % _tickerMessages.length];
+      _tickerInner.style.padding   = padding;
+      _tickerInner.style.opacity   = '1';
+      _tickerMsgIndex++;
+      _tickerFadeTimer = setTimeout(showNext, _tickerDwellMs);
+    }, 500);
+  }
+
+  _tickerInner.textContent   = _tickerMessages[0] || '';
+  _tickerInner.style.opacity = '1';
+  _tickerMsgIndex = 1;
+
+  if (_tickerMessages.length > 1) {
+    _tickerFadeTimer = setTimeout(showNext, _tickerDwellMs);
+  }
+}
+
+function _startTicker() {
+  if (!_tickerInner) return;
+  const mode = _cfg.tickerMode || 'scroll';
+  if (mode === 'fade') {
+    _startTickerFade();
+  } else {
+    _startTickerScroll();
+  }
+}
+
+function _stopTicker() {
+  if (_tickerFrame) { cancelAnimationFrame(_tickerFrame); _tickerFrame = null; }
+  if (_tickerFadeTimer) { clearTimeout(_tickerFadeTimer); _tickerFadeTimer = null; }
+}
+
+// ---------------------------------------------------------------------------
+// Divider management
+// ---------------------------------------------------------------------------
+
+// Rebuild dividers between visible slots.
+function _updateDividers() {
+  if (!_barEl) return;
+  for (const d of _barEl.querySelectorAll('.infobar-divider')) d.remove();
+
+  const slots = [];
+  if (_clockEl && _cfg.infoBarShowClock) slots.push(_clockEl);
+  const _showAnyEvent = _cfg.infoBarShowCurrentEvent !== false || _cfg.infoBarShowNextEvent !== false;
+  if (_eventEl && _showAnyEvent && _eventEl.style.display !== 'none') slots.push(_eventEl);
+  if (_tickerEl) slots.push(_tickerEl);
+
+  // Insert dividers between adjacent visible slots
+  for (let i = 0; i < slots.length - 1; i++) {
+    const div = document.createElement('div');
+    div.className = 'infobar-divider';
+    slots[i].insertAdjacentElement('afterend', div);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DOM build
+// ---------------------------------------------------------------------------
+
+function _buildBar(cfg) {
+  _ensureStyle();
+
+  const bar = document.createElement('div');
+  bar.id = 'overlay-infobar';
+
+  // Clock slot
+  if (cfg.infoBarShowClock !== false) {
+    _clockEl = document.createElement('div');
+    _clockEl.id = 'overlay-infobar-clock';
+    _clockEl.textContent = _formatClock();
+    bar.appendChild(_clockEl);
+  } else {
+    _clockEl = null;
+  }
+
+  // Event slot — shown when at least one of the two event flags is on
+  const showAnyEvent = cfg.infoBarShowCurrentEvent !== false || cfg.infoBarShowNextEvent !== false;
+  if (showAnyEvent) {
+    _eventEl = document.createElement('div');
+    _eventEl.id = 'overlay-infobar-event';
+    _eventEl.style.display = 'none'; // hidden until there's something to show
+
+    _eventNameEl = document.createElement('span');
+    _eventNameEl.id = 'overlay-infobar-event-name';
+    _eventEl.appendChild(_eventNameEl);
+
+    _eventTimeEl = document.createElement('span');
+    _eventTimeEl.id = 'overlay-infobar-event-time';
+    _eventEl.appendChild(_eventTimeEl);
+
+    bar.appendChild(_eventEl);
+  } else {
+    _eventEl = null;
+    _eventNameEl = null;
+    _eventTimeEl = null;
+  }
+
+  // Ticker slot — only shown when ticker is enabled and has messages
+  const rawMessages = Array.isArray(cfg.tickerMessages) ? cfg.tickerMessages.filter(m => m && m.trim()) : [];
+
+  if (cfg.tickerEnabled && rawMessages.length) {
+    const mode  = cfg.tickerMode  || 'scroll';
+    const align = cfg.tickerAlign || 'start';
+
+    _tickerEl = document.createElement('div');
+    _tickerEl.id = 'overlay-infobar-ticker';
+
+    _tickerInner = document.createElement('div');
+    _tickerInner.id = 'overlay-infobar-ticker-inner';
+
+    if (mode === 'fade') {
+      // Alignment applies in fade mode — set justify-content on container
+      if (align === 'center') _tickerEl.style.justifyContent = 'center';
+      else if (align === 'end') _tickerEl.style.justifyContent = 'flex-end';
+      // else default: flex-start
+      _tickerInner.textContent = rawMessages[0];
+    } else {
+      // Scroll mode: all messages joined, entry from right
+      _tickerInner.textContent = rawMessages.join('\u2003\u00b7\u2003');
+      _tickerInner.style.paddingLeft = '100%';
+    }
+
+    _tickerEl.appendChild(_tickerInner);
+    bar.appendChild(_tickerEl);
+  } else {
+    _tickerEl    = null;
+    _tickerInner = null;
+  }
+
+  return bar;
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Mount (or remount) the info bar.
+ * @param {object} cfg   Screen config object
+ * @param {Array}  schedule  Sorted array of schedule entries
+ */
+export function mountInfoBar(cfg, schedule) {
+  removeInfoBar();
+
+  _cfg      = cfg || {};
+  _schedule = Array.isArray(schedule) ? schedule : [];
+  _tickerSpeed = Number(_cfg.tickerSpeed) || 60;
+
+  // Prepare fade-mode state
+  _tickerMessages = Array.isArray(_cfg.tickerMessages) ? _cfg.tickerMessages.filter(m => m && m.trim()) : [];
+  _tickerMsgIndex = 0;
+  _tickerDwellMs  = Math.max(500, (Number(_cfg.tickerFadeDwellSec) || 5) * 1000);
+
+  _barEl = _buildBar(_cfg);
+  document.body.appendChild(_barEl);
+
+  _eventSlotLast = { name: null, timeVisible: null, visible: null };
+
+  if (_cfg.infoBarShowClock !== false) _startClock();
+  const showAnyEvent = _cfg.infoBarShowCurrentEvent !== false || _cfg.infoBarShowNextEvent !== false;
+  if (showAnyEvent) {
+    _refreshEventSlot();
+    _startCountdownTimer();
+  }
+  if (_tickerInner) _startTicker();
+
+  _updateDividers();
+}
+
+/**
+ * Tear down the info bar and stop all timers.
+ */
+export function removeInfoBar() {
+  _stopClock();
+  _stopCountdownTimer();
+  _stopTicker();
+  if (_barEl) { _barEl.remove(); _barEl = null; }
+  _clockEl = _eventEl = _eventNameEl = _eventTimeEl = _tickerEl = _tickerInner = null;
+  _alert = null;
+  _tickerMessages = [];
+  _tickerMsgIndex = 0;
+  _eventSlotLast = { name: null, timeVisible: null, visible: null };
+}
+
+/**
+ * Update schedule data — called when a schedule_update WebSocket message arrives.
+ * @param {Array} schedule
+ */
+export function updateInfoBarSchedule(schedule) {
+  _schedule = Array.isArray(schedule) ? schedule : [];
+  _refreshEventSlot();
+}
+
+/**
+ * Set an explicit countdown alert to display in the event slot.
+ * @param {object} alert
+ */
+export function setInfoBarAlert(alert) {
+  _alert = alert || null;
+  _refreshEventSlot();
+  if (_alert) _startCountdownTimer();
+}
+
+/**
+ * Clear a specific alert from the event slot.
+ * Falls back to schedule auto-display.
+ * @param {string} alertId
+ */
+export function clearInfoBarAlert(alertId) {
+  if (_alert && _alert.id === String(alertId || '')) {
+    _alert = null;
+    _refreshEventSlot();
+  }
+}
+
+/**
+ * Return the current bar height in pixels (0 if not mounted).
+ * Used by the orchestrator to compute safe insets for bugs/qr-bugs.
+ */
+export function getInfoBarHeight() {
+  if (!_barEl) return 0;
+  return _barEl.offsetHeight || 40;
+}
+
+/**
+ * Returns true if the info bar is currently mounted in the DOM.
+ */
+export function isInfoBarMounted() {
+  return _barEl !== null;
+}

@@ -360,8 +360,9 @@ const PAGE_TITLES = {
   playlists: 'Playlists',
   content:   'Content',
   photos:    'Photos',
-  overlays:  'Overlays',
+  signage:   'Signage',
   alerts:    'Alerts',
+  schedule:  'Schedule',
   submissions: 'Submissions',
   advanced:  'Advanced',
   settings:  'Settings',
@@ -386,6 +387,7 @@ function setPage(page) {
   // Lazy-load page data
   if (page === 'photos')    refreshPhotos();
   if (page === 'playlists' || page === 'content') doLoadSlides();
+  if (page === 'alerts' || page === 'schedule') window._loadAlertsAndSchedule?.().catch(() => {});
 }
 
 // ---------------------------------------------------------------------------
@@ -437,6 +439,11 @@ function connectWs() {
       _playlists = msg.playlists || [];
       refreshSlides(null, _playlists);
       _refreshPlaylistSelects();
+      return;
+    }
+
+    if (msg.type === 'alert_fire' || msg.type === 'alert_dismiss' || msg.type === 'schedule_update') {
+      window._loadAlertsAndSchedule?.().catch(() => {});
       return;
     }
 

@@ -26,6 +26,7 @@ import {
   setAlerts,
   pushAlert,
   removeAlert,
+  setSchedule,
 } from './overlays/index.js';
 import { setApprovedSubmissions, addApprovedSubmission } from './submissions.js';
 import { applyTheme } from './theme.js';
@@ -147,6 +148,7 @@ async function handleMessage(msg) {
       if (msg.slides)    updateSlides(msg.slides);
       if (msg.playlists) updatePlaylists(msg.playlists);
       if (msg.alerts) setAlerts(msg.alerts);
+      if (msg.eventSchedule) setSchedule(msg.eventSchedule);
       if (msg.approvedSubmissions) setApprovedSubmissions(msg.approvedSubmissions);
 
       if (photoRegistry.size > 0) {
@@ -242,6 +244,10 @@ async function handleMessage(msg) {
 
     case 'reload':
       setTimeout(() => location.reload(), msg.delayMs ?? 1500);
+      break;
+
+    case 'schedule_update':
+      if (msg.schedule) setSchedule(msg.schedule);
       break;
 
     case 'alert_fire':

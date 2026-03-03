@@ -214,6 +214,7 @@ function _renderSchedule(schedule) {
         <div class="alert-item-meta">${esc(_formatStart(item.startTime))}${endMeta}${item.location ? ` · ${esc(item.location)}` : ''} · reminders: ${esc((item.alertMinutesBefore || []).join(', '))}${esc(countdownMeta)}</div>
       </div>
       <div class="action-row">
+        <button class="sc-btn" data-schedule-action="edit" data-schedule-id="${esc(item.id)}">Edit</button>
         <button class="sc-btn sc-btn-del" data-schedule-action="delete" data-schedule-id="${esc(item.id)}">Delete</button>
       </div>
     </div>
@@ -309,6 +310,8 @@ function _setVal(id, value) {
 }
 
 let _cachedAlerts = [];
+let _cachedSchedule = [];
+let _editingScheduleId = null;
 
 async function loadAlertsAndSchedule() {
   const [alertsRes, scheduleRes] = await Promise.all([
@@ -319,6 +322,7 @@ async function loadAlertsAndSchedule() {
   const alerts = Array.isArray(alertsRes?.alerts) ? alertsRes.alerts : [];
   const schedule = Array.isArray(scheduleRes?.schedule) ? scheduleRes.schedule : [];
   _cachedAlerts = alerts;
+  _cachedSchedule = schedule;
   _renderAlerts(alerts);
   _renderSchedule(schedule);
   _renderQuickAlertLiveList(alerts);
@@ -405,9 +409,6 @@ async function addScheduleEntry() {
   const endTime   = _dtPairToIso('schedule-end');
   const alertMinutesBefore   = _readOffsets();
   const countdownFromMinutes = Number(document.getElementById('schedule-countdown-from')?.value || 0);
-  const alertStyle           = document.getElementById('schedule-alert-style')?.value || 'banner';
-  const alertPosition        = document.getElementById('schedule-alert-position')?.value || 'top-center';
-  const alertDurationSec     = Number(document.getElementById('schedule-alert-duration')?.value ?? 18);
 
   if (!startTime) throw new Error('Please choose a valid start time');
   if (endTime && endTime <= startTime) throw new Error('End time must be after start time');
@@ -415,7 +416,7 @@ async function addScheduleEntry() {
   await apiFetch('/api/schedule', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, location, startTime, endTime: endTime || null, alertMinutesBefore, countdownFromMinutes, alertStyle, alertPosition, alertDurationSec }),
+    body: JSON.stringify({ name, location, startTime, endTime: endTime || null, alertMinutesBefore, countdownFromMinutes }),
   });
 
   showToast('Event added to schedule');
@@ -445,12 +446,77 @@ async function saveSubmissionSettings() {
   showToast('Submission settings saved');
 }
 
+function _openEditForm(id) {
+  const item = _cachedSchedule.find(e => e.id === id);
+  if (!item) return;
+  _editingScheduleId = id;
+
+  _setVal('sched-edit-name', item.name || '');
+  _setVal('sched-edit-location', item.location || '');
+
+  const startDate = document.getElementById('sched-edit-start-date');
+  const startTime = document.getElementById('sched-edit-start-time');
+  if (startDate) startDate.value = _isoToInputDate(item.startTime);
+  if (startTime) startTime.value = _isoToInputTime(item.startTime);
+
+  const endDate = document.getElementById('sched-edit-end-date');
+  const endTime = document.getElementById('sched-edit-end-time');
+  if (endDate) endDate.value = _isoToInputDate(item.endTime);
+  if (endTime) endTime.value = _isoToInputTime(item.endTime);
+
+  _setVal('sched-edit-offsets', (item.alertMinutesBefore || []).join(', '));
+  _setVal('sched-edit-countdown-from', item.countdownFromMinutes ?? 0);
+
+  const card = document.getElementById('schedule-edit-card');
+  if (card) {
+    card.style.display = '';
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function _closeEditForm() {
+  _editingScheduleId = null;
+  const card = document.getElementById('schedule-edit-card');
+  if (card) card.style.display = 'none';
+}
+
+function _readEditOffsets() {
+  const raw = document.getElementById('sched-edit-offsets')?.value || '15,5';
+  return raw
+    .split(',')
+    .map(v => Number(v.trim()))
+    .filter(v => Number.isFinite(v) && v >= 0 && v <= 240)
+    .map(v => Math.floor(v));
+}
+
+async function _saveEditEntry() {
+  if (!_editingScheduleId) return;
+  const name     = document.getElementById('sched-edit-name')?.value || '';
+  const location = document.getElementById('sched-edit-location')?.value || '';
+  const startTime = _dtPairToIso('sched-edit-start');
+  const endTime   = _dtPairToIso('sched-edit-end');
+  const alertMinutesBefore   = _readEditOffsets();
+  const countdownFromMinutes = Number(document.getElementById('sched-edit-countdown-from')?.value || 0);
+
+  if (!startTime) throw new Error('Please choose a valid start time');
+  if (endTime && endTime <= startTime) throw new Error('End time must be after start time');
+
+  await apiFetch(`/api/schedule/${encodeURIComponent(_editingScheduleId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, location, startTime, endTime: endTime || null, alertMinutesBefore, countdownFromMinutes }),
+  });
+
+  _closeEditForm();
+  showToast('Event updated');
+  await loadAlertsAndSchedule();
+}
+
 function bindActions() {
   // Contextual form wiring: position options and countdown field visibility
   _bindStylePositionSync('alerts-style', 'alerts-position');
   _bindCountdownFieldVisibility('alerts-style', 'alerts-countdown-wrap');
   _bindStylePositionSync('qa-style', 'qa-position');
-
   document.getElementById('alerts-fire-now')?.addEventListener('click', async () => {
     try {
       await createAlert(true);
@@ -516,15 +582,37 @@ function bindActions() {
     }
   });
 
-  document.getElementById('schedule-list')?.addEventListener('click', async e => {
-    const btn = e.target.closest('button[data-schedule-action="delete"]');
-    if (!btn) return;
-    const id = btn.dataset.scheduleId;
+  document.getElementById('sched-edit-save')?.addEventListener('click', async () => {
     try {
-      await apiFetch(`/api/schedule/${encodeURIComponent(id)}`, { method: 'DELETE' });
-      await loadAlertsAndSchedule();
+      await _saveEditEntry();
     } catch (err) {
       showToast(err.message, true);
+    }
+  });
+
+  document.getElementById('sched-edit-cancel')?.addEventListener('click', () => {
+    _closeEditForm();
+  });
+
+  document.getElementById('schedule-list')?.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-schedule-action]');
+    if (!btn) return;
+    const id = btn.dataset.scheduleId;
+    const action = btn.dataset.scheduleAction;
+
+    if (action === 'edit') {
+      _openEditForm(id);
+      return;
+    }
+
+    if (action === 'delete') {
+      try {
+        await apiFetch(`/api/schedule/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        if (_editingScheduleId === id) _closeEditForm();
+        await loadAlertsAndSchedule();
+      } catch (err) {
+        showToast(err.message, true);
+      }
     }
   });
 

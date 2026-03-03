@@ -257,15 +257,23 @@ function _resolveEventSlots() {
     }
   }
 
-  // Find current event
+  // Find current event — walk sorted backwards from the last past event
   let current = null;
   if (showCurrent) {
-    const past = sorted.filter(({ startMs }) => startMs <= now);
-    for (let i = past.length - 1; i >= 0; i--) {
-      const { e } = past[i];
+    // Find the index of the last event that has already started
+    let lastPastIdx = -1;
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      if (sorted[i].startMs <= now) { lastPastIdx = i; break; }
+    }
+    for (let i = lastPastIdx; i >= 0; i--) {
+      const { e } = sorted[i];
       if (e.endTime) {
         const endMs = Number(new Date(e.endTime));
         if (Number.isFinite(endMs) && endMs <= now) continue;
+      } else {
+        // No explicit end time — the event ends when the next one in the schedule starts.
+        const nextEvStartMs = sorted[i + 1]?.startMs;
+        if (nextEvStartMs !== undefined && nextEvStartMs <= now) continue;
       }
       current = { name: e.name || '', loc: e.location || '', remaining: null, targetMs: null, kind: 'current' };
       break;

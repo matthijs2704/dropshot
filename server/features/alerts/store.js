@@ -139,19 +139,6 @@ function _sanitizeSchedulePatch(input, base = {}) {
     next.countdownFromMinutes = (Number.isFinite(v) && v > 0) ? Math.min(240, Math.floor(v)) : 0;
   }
 
-  if (Object.prototype.hasOwnProperty.call(src, 'alertStyle')) {
-    next.alertStyle = ALERT_STYLES.has(src.alertStyle) ? src.alertStyle : 'banner';
-  }
-
-  if (Object.prototype.hasOwnProperty.call(src, 'alertPosition')) {
-    next.alertPosition = ALERT_POSITIONS.has(src.alertPosition) ? src.alertPosition : 'top-center';
-  }
-
-  if (Object.prototype.hasOwnProperty.call(src, 'alertDurationSec')) {
-    const v = Number(src.alertDurationSec);
-    next.alertDurationSec = (Number.isFinite(v) && v >= 0) ? Math.min(3600, Math.floor(v)) : 18;
-  }
-
   return next;
 }
 
@@ -190,9 +177,6 @@ function _sanitizeEventScheduleEntry(item) {
     endTime: null,
     alertMinutesBefore: [15, 5],
     countdownFromMinutes: 0,
-    alertStyle: 'banner',
-    alertPosition: 'top-center',
-    alertDurationSec: 18,
     firedOffsets: [],
   });
   if (!next.id) next.id = crypto.randomUUID();
@@ -378,9 +362,6 @@ function createScheduleEntry(input) {
     startTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     alertMinutesBefore: [15, 5],
     countdownFromMinutes: 0,
-    alertStyle: 'banner',
-    alertPosition: 'top-center',
-    alertDurationSec: 18,
     firedOffsets: [],
   };
 

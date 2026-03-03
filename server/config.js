@@ -65,7 +65,6 @@ function defaultScreenConfig() {
     qrBugLabel: '',
     infoBarEnabled: false,
     infoBarShowClock: true,
-    infoBarClock24h: true,
     infoBarShowCurrentEvent: true,
     infoBarShowNextEvent: true,
   };
@@ -114,6 +113,10 @@ function defaultConfig() {
     healthBroadcastIntervalMs: 3000,
     sessionSecret: null,
     theme: null,
+    clock24h: true,
+    scheduleAlertStyle: 'banner',
+    scheduleAlertPosition: 'top-center',
+    scheduleAlertDurationSec: 18,
     slides: [],
     playlists: [],
     alerts: [],
@@ -180,7 +183,6 @@ const SCREEN_CONFIG_KEYS = new Set([
   'qrBugLabel',
   'infoBarEnabled',
   'infoBarShowClock',
-  'infoBarClock24h',
   'infoBarShowCurrentEvent',
   'infoBarShowNextEvent',
 ]);
@@ -467,7 +469,7 @@ function sanitizeScreenConfig(input, base) {
       next.playlistId = value == null ? null : String(value);
       continue;
     }
-    if (['tickerEnabled', 'bugEnabled', 'qrBugEnabled', 'infoBarEnabled', 'infoBarShowClock', 'infoBarClock24h', 'infoBarShowCurrentEvent', 'infoBarShowNextEvent'].includes(key)) {
+    if (['tickerEnabled', 'bugEnabled', 'qrBugEnabled', 'infoBarEnabled', 'infoBarShowClock', 'infoBarShowCurrentEvent', 'infoBarShowNextEvent'].includes(key)) {
       next[key] = Boolean(value);
       continue;
     }
@@ -596,6 +598,15 @@ function sanitizeConfig(input, validThemeIds) {
   next.eventName = typeof raw.eventName === 'string' ? raw.eventName : '';
   next.publicBaseUrl = typeof raw.publicBaseUrl === 'string' ? raw.publicBaseUrl.trim().slice(0, 400) : '';
 
+  next.clock24h = raw.clock24h !== false;
+
+  const schedAlertStyle = String(raw.scheduleAlertStyle || '');
+  next.scheduleAlertStyle = ALERT_STYLES.has(schedAlertStyle) ? schedAlertStyle : 'banner';
+  const schedAlertPos = String(raw.scheduleAlertPosition || '');
+  next.scheduleAlertPosition = ALERT_POSITIONS.has(schedAlertPos) ? schedAlertPos : 'top-center';
+  const schedAlertDur = Number(raw.scheduleAlertDurationSec);
+  next.scheduleAlertDurationSec = Number.isFinite(schedAlertDur) ? Math.max(0, Math.min(3600, Math.floor(schedAlertDur))) : 18;
+
   const width = Number(raw.displayWidth);
   const height = Number(raw.displayHeight);
   next.displayWidth = Number.isFinite(width) ? Math.max(320, Math.floor(width)) : 1920;
@@ -683,6 +694,25 @@ function sanitizeGlobalConfig(input, target, validThemeIds) {
 
   if (Object.prototype.hasOwnProperty.call(input, 'publicBaseUrl')) {
     target.publicBaseUrl = String(input.publicBaseUrl || '').trim().slice(0, 400);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'clock24h')) {
+    target.clock24h = Boolean(input.clock24h);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'scheduleAlertStyle')) {
+    const v = String(input.scheduleAlertStyle || '');
+    target.scheduleAlertStyle = ALERT_STYLES.has(v) ? v : 'banner';
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'scheduleAlertPosition')) {
+    const v = String(input.scheduleAlertPosition || '');
+    target.scheduleAlertPosition = ALERT_POSITIONS.has(v) ? v : 'top-center';
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'scheduleAlertDurationSec')) {
+    const v = Number(input.scheduleAlertDurationSec);
+    if (Number.isFinite(v)) target.scheduleAlertDurationSec = Math.max(0, Math.min(3600, Math.floor(v)));
   }
 
   if (Object.prototype.hasOwnProperty.call(input, 'displayWidth')) {

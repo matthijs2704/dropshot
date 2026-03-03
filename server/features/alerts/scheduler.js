@@ -4,6 +4,7 @@ const crypto = require('crypto');
 
 const { broadcast } = require('../ws/broadcast');
 const { getAlerts, getEventSchedule, persistAlertStore } = require('./store');
+const { getConfig } = require('../../config');
 
 let _timer = null;
 
@@ -33,9 +34,10 @@ function _createReminderAlert(eventEntry, minutesBefore, now) {
     : `starts in ${minutesBefore} minute${minutesBefore === 1 ? '' : 's'}`;
   const locationText = eventEntry.location ? ` (${eventEntry.location})` : '';
 
-  const style       = eventEntry.alertStyle       || 'banner';
-  const position    = eventEntry.alertPosition    || 'top-center';
-  const durationSec = Number.isFinite(Number(eventEntry.alertDurationSec)) ? Number(eventEntry.alertDurationSec) : 18;
+  const cfg = getConfig();
+  const style       = cfg.scheduleAlertStyle    || 'banner';
+  const position    = cfg.scheduleAlertPosition || 'top-center';
+  const durationSec = Number.isFinite(Number(cfg.scheduleAlertDurationSec)) ? Number(cfg.scheduleAlertDurationSec) : 18;
 
   return {
     id: crypto.randomUUID(),

@@ -37,7 +37,7 @@ function _createReminderAlert(eventEntry, minutesBefore, now) {
     id: crypto.randomUUID(),
     style: 'banner',
     message: `${eventEntry.name || 'Next event'} ${startsInText}${locationText}`,
-    position: 'top',
+    position: 'top-center',
     priority: minutesBefore <= 5 ? 'urgent' : 'normal',
     durationSec: 18,
     trigger: 'event_auto',

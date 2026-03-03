@@ -3,9 +3,24 @@
 import { mountTicker, removeTicker }   from './ticker.js';
 import { mountBug, removeBug }         from './bug.js';
 import { mountQrBug, removeQrBug }     from './qr-bug.js';
-import { setAlertSnapshot, showAlert, dismissAlert, clearAlerts } from './alerts.js';
+import { setAlertSnapshot, showAlert, dismissAlert, clearAlerts, setBottomInset } from './alerts.js';
+import {
+  mountInfoBar,
+  removeInfoBar,
+  updateInfoBarSchedule,
+  getInfoBarHeight,
+} from './infobar.js';
+
+/**
+ * Returns the current bottom safe inset in pixels (info bar or standalone ticker).
+ * 0 when nothing occupies the bottom edge.
+ */
+export function getBottomInset() {
+  return getInfoBarHeight();
+}
 
 let _screenId = null;
+let _schedule = [];
 
 export function initOverlays(screenId) {
   _screenId = screenId;
@@ -18,28 +33,39 @@ export function initOverlays(screenId) {
 export async function applyOverlays(config) {
   const cfg = config?.screens?.[String(_screenId)] || config?.screens?.['1'] || {};
 
-  // Ticker — mount first so we know which edge is occupied
   let safeInsets = { top: 0, bottom: 0 };
 
-  if (cfg.tickerEnabled && cfg.tickerText) {
-    mountTicker(cfg);
-    const tickerEl = document.getElementById('overlay-ticker');
-    const tickerHeight = tickerEl ? tickerEl.offsetHeight : 38;
-    const pos = cfg.tickerPosition || 'bottom';
-    if (pos === 'bottom') safeInsets.bottom = tickerHeight;
-    else                  safeInsets.top    = tickerHeight;
-  } else {
+  if (cfg.infoBarEnabled) {
+    // Info bar takes over the bottom edge; standalone ticker is suppressed
     removeTicker();
+    mountInfoBar(cfg, _schedule);
+    safeInsets.bottom = getInfoBarHeight();
+  } else {
+    removeInfoBar();
+    // Standalone ticker
+    const _hasTickerContent = Array.isArray(cfg.tickerMessages) && cfg.tickerMessages.some(m => m && m.trim());
+    if (cfg.tickerEnabled && _hasTickerContent) {
+      mountTicker(cfg);
+      const tickerEl = document.getElementById('overlay-ticker');
+      const tickerHeight = tickerEl ? tickerEl.offsetHeight : 38;
+      const pos = cfg.tickerPosition || 'bottom';
+      if (pos === 'bottom') safeInsets.bottom = tickerHeight;
+      else                  safeInsets.top    = tickerHeight;
+    } else {
+      removeTicker();
+    }
   }
 
-  // Corner bug (shift away from ticker edge)
+  // Corner bug (shift away from occupied edge)
+  setBottomInset(safeInsets.bottom);
+
   if (cfg.bugEnabled && (cfg.bugText || cfg.bugImageUrl)) {
     mountBug(cfg, safeInsets);
   } else {
     removeBug();
   }
 
-  // QR bug (shift away from ticker edge)
+  // QR bug (shift away from occupied edge)
   if (cfg.qrBugEnabled && cfg.qrBugUrl) {
     await mountQrBug(cfg, safeInsets);
   } else {
@@ -49,9 +75,19 @@ export async function applyOverlays(config) {
 
 export function removeAllOverlays() {
   removeTicker();
+  removeInfoBar();
   removeBug();
   removeQrBug();
   clearAlerts();
+}
+
+/**
+ * Update the event schedule — forwarded to the info bar.
+ * @param {Array} schedule
+ */
+export function setSchedule(schedule) {
+  _schedule = Array.isArray(schedule) ? schedule : [];
+  updateInfoBarSchedule(_schedule);
 }
 
 export function setAlerts(alerts) {

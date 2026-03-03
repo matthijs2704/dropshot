@@ -5,7 +5,18 @@ const crypto = require('crypto');
 const { getSettingJson, setSettingJson } = require('../../db');
 
 const ALERT_STYLES = new Set(['banner', 'popup', 'countdown']);
-const ALERT_POSITIONS = new Set(['top', 'bottom', 'center']);
+const ALERT_POSITIONS = new Set([
+  // banner
+  'top-left', 'top-center', 'top-right',
+  'bottom-left', 'bottom-center', 'bottom-right',
+  // popup
+  'center',
+  'top-center', 'bottom-center',  // shared with banner
+  // countdown
+  'top-right', 'top-left', 'bottom-right', 'bottom-left',  // shared
+  // legacy values — kept for backwards compat
+  'top', 'bottom',
+]);
 const ALERT_PRIORITIES = new Set(['normal', 'urgent']);
 const ALERT_TRIGGERS = new Set(['manual', 'scheduled', 'event_auto']);
 
@@ -77,8 +88,14 @@ function _sanitizeAlertPatch(input, base = {}) {
   }
 
   if (!ALERT_POSITIONS.has(next.position)) {
-    next.position = next.style === 'popup' ? 'center' : 'top';
+    if (next.style === 'popup')      next.position = 'center';
+    else if (next.style === 'countdown') next.position = 'top-right';
+    else                             next.position = 'top-center';
   }
+
+  // Migrate legacy 'top' / 'bottom' to explicit positions
+  if (next.position === 'top')    next.position = next.style === 'countdown' ? 'top-right' : 'top-center';
+  if (next.position === 'bottom') next.position = next.style === 'countdown' ? 'bottom-right' : 'bottom-center';
 
   return next;
 }
@@ -108,8 +125,18 @@ function _sanitizeSchedulePatch(input, base = {}) {
     if (iso) next.startTime = iso;
   }
 
+  if (Object.prototype.hasOwnProperty.call(src, 'endTime')) {
+    const iso = _toIso(src.endTime);
+    next.endTime = iso || null;
+  }
+
   if (Object.prototype.hasOwnProperty.call(src, 'alertMinutesBefore')) {
     next.alertMinutesBefore = _sanitizeOffsets(src.alertMinutesBefore);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(src, 'countdownFromMinutes')) {
+    const v = Number(src.countdownFromMinutes);
+    next.countdownFromMinutes = (Number.isFinite(v) && v > 0) ? Math.min(240, Math.floor(v)) : 0;
   }
 
   return next;
@@ -121,7 +148,7 @@ function _sanitizeAlert(alert) {
     id: '',
     style: 'banner',
     message: '',
-    position: 'top',
+    position: 'top-center',
     priority: 'normal',
     durationSec: 15,
     trigger: 'manual',
@@ -147,7 +174,9 @@ function _sanitizeEventScheduleEntry(item) {
     name: '',
     location: '',
     startTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    endTime: null,
     alertMinutesBefore: [15, 5],
+    countdownFromMinutes: 0,
     firedOffsets: [],
   });
   if (!next.id) next.id = crypto.randomUUID();
@@ -242,7 +271,7 @@ function createAlert(input) {
     id: crypto.randomUUID(),
     style: 'banner',
     message: '',
-    position: 'top',
+    position: 'top-center',
     priority: 'normal',
     durationSec: 15,
     trigger: 'manual',
@@ -332,6 +361,7 @@ function createScheduleEntry(input) {
     location: '',
     startTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     alertMinutesBefore: [15, 5],
+    countdownFromMinutes: 0,
     firedOffsets: [],
   };
 

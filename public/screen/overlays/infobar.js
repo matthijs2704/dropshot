@@ -180,7 +180,7 @@ function _ensureStyle() {
 // ---------------------------------------------------------------------------
 
 function _formatClock() {
-  const use24h = _cfg.infoBarClock24h !== false;
+  const use24h = _cfg.clock24h !== false;
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: !use24h });
 }
 

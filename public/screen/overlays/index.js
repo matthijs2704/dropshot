@@ -32,13 +32,15 @@ export function initOverlays(screenId) {
  */
 export async function applyOverlays(config) {
   const cfg = config?.screens?.[String(_screenId)] || config?.screens?.['1'] || {};
+  // Merge global clock24h into the screen cfg so infobar can read it
+  const cfgWithGlobals = { ...cfg, clock24h: config?.clock24h !== false };
 
   let safeInsets = { top: 0, bottom: 0 };
 
   if (cfg.infoBarEnabled) {
     // Info bar takes over the bottom edge; standalone ticker is suppressed
     removeTicker();
-    mountInfoBar(cfg, _schedule);
+    mountInfoBar(cfgWithGlobals, _schedule);
     safeInsets.bottom = getInfoBarHeight();
   } else {
     removeInfoBar();

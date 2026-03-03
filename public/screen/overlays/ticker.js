@@ -48,7 +48,7 @@ function _createWrap(cfg) {
   return wrap;
 }
 
-function _createInner(text) {
+function _createInner(text, forFade) {
   const inner = document.createElement('div');
   inner.id = 'overlay-ticker-inner';
   inner.style.cssText = `
@@ -57,11 +57,11 @@ function _createInner(text) {
     font-weight: var(--ticker-font-weight, 600);
     color: var(--ticker-color, #fff);
     will-change: transform;
-    padding-left: 100vw;
     letter-spacing: var(--ticker-letter-spacing, 0.02em);
     transition: opacity 0.5s ease;
   `;
   inner.style.fontFamily = "var(--ticker-font-family, 'Segoe UI', system-ui, sans-serif)";
+  if (!forFade) inner.style.paddingLeft = '100vw';
   inner.textContent = text;
   return inner;
 }
@@ -77,7 +77,7 @@ function _justifyContent(align) {
 function _fadePadding(align) {
   if (align === 'center') return '0 32px';
   if (align === 'end')    return '0 16px 0 0';
-  return '16px 0 0 16px';
+  return '0 0 0 16px'; // start
 }
 
 // ---------------------------------------------------------------------------
@@ -162,8 +162,7 @@ export function mountTicker(cfg) {
 
   if (mode === 'fade') {
     _tickerEl.style.justifyContent = _justifyContent(align);
-    const inner = _createInner(messages[0] || '');
-    inner.style.paddingLeft = '0';
+    const inner = _createInner(messages[0] || '', true);
     _tickerEl.appendChild(inner);
     document.body.appendChild(_tickerEl);
 
@@ -172,7 +171,7 @@ export function mountTicker(cfg) {
   } else {
     // scroll mode — join all messages, alignment irrelevant
     const text  = messages.join('\u2003\u00b7\u2003');
-    const inner = _createInner(text);
+    const inner = _createInner(text, false);
     _tickerEl.appendChild(inner);
     document.body.appendChild(_tickerEl);
     _startScroll(inner, cfg.tickerSpeed || 60);

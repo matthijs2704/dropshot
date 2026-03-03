@@ -287,6 +287,49 @@
         <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
           Persistent overlays sit on top of photo and slide content at all times. Configure per-screen ticker, corner bug, QR code, and info bar here.
         </p>
+
+        <!-- Global overlay settings -->
+        <details class="section" open style="margin-bottom:16px">
+          <summary>Global Settings</summary>
+          <div class="section-body">
+            <div class="section-label" style="margin-bottom:8px">Clock</div>
+            <div class="check-row">
+              <input type="checkbox" id="ov-global-clock24h">
+              <label for="ov-global-clock24h">24-hour clock (applies to all info bars)</label>
+            </div>
+            <div class="section-label" style="margin-top:16px;margin-bottom:8px">Schedule alert defaults</div>
+            <div class="two-col">
+              <div class="field">
+                <label for="ov-global-sched-style">Alert style</label>
+                <select id="ov-global-sched-style">
+                  <option value="banner">Banner</option>
+                  <option value="popup">Popup</option>
+                  <option value="countdown">Countdown</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="ov-global-sched-position">Alert position</label>
+                <select id="ov-global-sched-position">
+                  <option value="top-center">Top center</option>
+                  <option value="top-left">Top left</option>
+                  <option value="top-right">Top right</option>
+                  <option value="bottom-center">Bottom center</option>
+                  <option value="bottom-left">Bottom left</option>
+                  <option value="bottom-right">Bottom right</option>
+                  <option value="center">Center (popup)</option>
+                </select>
+              </div>
+            </div>
+            <div class="two-col" style="margin-top:10px">
+              <div class="field">
+                <label for="ov-global-sched-duration">Alert duration (seconds, 0 = persistent)</label>
+                <input type="number" id="ov-global-sched-duration" min="0" max="3600" value="18">
+              </div>
+              <div class="field"></div>
+            </div>
+          </div>
+        </details>
+
         <div class="overlays-grid" id="overlays-grid"></div>
       </div>
     </div>
@@ -466,34 +509,6 @@
               <input id="schedule-countdown-from" type="number" min="0" max="240" value="0" placeholder="30">
             </div>
           </div>
-          <div class="two-col" style="margin-top:10px">
-            <div class="field">
-              <label for="schedule-alert-style">Alert style</label>
-              <select id="schedule-alert-style">
-                <option value="banner">Banner</option>
-                <option value="popup">Popup</option>
-                <option value="countdown">Countdown</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="schedule-alert-position">Alert position</label>
-              <select id="schedule-alert-position">
-                <option value="top-center">Top center</option>
-                <option value="top-left">Top left</option>
-                <option value="top-right">Top right</option>
-                <option value="bottom-left">Bottom left</option>
-                <option value="bottom-right">Bottom right</option>
-                <option value="center">Center (popup)</option>
-              </select>
-            </div>
-          </div>
-          <div class="two-col" style="margin-top:10px">
-            <div class="field">
-              <label for="schedule-alert-duration">Alert duration (seconds, 0 = persistent)</label>
-              <input id="schedule-alert-duration" type="number" min="0" max="3600" value="18">
-            </div>
-            <div class="field"></div>
-          </div>
           <div class="action-row" style="margin-top:10px">
             <button id="schedule-add" class="btn btn-primary btn-sm">Add event</button>
           </div>
@@ -504,6 +519,51 @@
           <div class="card-title">Upcoming events</div>
           <div id="schedule-list" class="alert-list">
             <div class="muted" style="font-size:12px">No events scheduled.</div>
+          </div>
+        </div>
+
+        <!-- Edit event card (hidden until edit is clicked) -->
+        <div class="card" id="schedule-edit-card" style="margin-top:16px;display:none">
+          <div class="card-title">Edit event</div>
+          <div class="two-col">
+            <div class="field">
+              <label for="sched-edit-name">Event name</label>
+              <input id="sched-edit-name" type="text" maxlength="200">
+            </div>
+            <div class="field">
+              <label for="sched-edit-location">Location (optional)</label>
+              <input id="sched-edit-location" type="text" maxlength="200">
+            </div>
+          </div>
+          <div class="two-col" style="margin-top:10px">
+            <div class="field">
+              <label>Start time</label>
+              <div class="dt-pair">
+                <input id="sched-edit-start-date" type="date">
+                <input id="sched-edit-start-time" type="text" placeholder="HH:MM" pattern="[0-9]{2}:[0-9]{2}" maxlength="5">
+              </div>
+            </div>
+            <div class="field">
+              <label>End time (optional)</label>
+              <div class="dt-pair">
+                <input id="sched-edit-end-date" type="date">
+                <input id="sched-edit-end-time" type="text" placeholder="HH:MM" pattern="[0-9]{2}:[0-9]{2}" maxlength="5">
+              </div>
+            </div>
+          </div>
+          <div class="two-col" style="margin-top:10px">
+            <div class="field">
+              <label for="sched-edit-offsets">Alert minutes before (comma separated)</label>
+              <input id="sched-edit-offsets" type="text" placeholder="30,15,5">
+            </div>
+            <div class="field">
+              <label for="sched-edit-countdown-from">Show next event countdown from (minutes, 0 = always)</label>
+              <input id="sched-edit-countdown-from" type="number" min="0" max="240">
+            </div>
+          </div>
+          <div class="action-row" style="margin-top:10px">
+            <button id="sched-edit-save" class="btn btn-primary btn-sm">Save changes</button>
+            <button id="sched-edit-cancel" class="btn btn-secondary btn-sm">Cancel</button>
           </div>
         </div>
 

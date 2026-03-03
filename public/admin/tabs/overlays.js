@@ -10,6 +10,8 @@ export function initOverlaysTab(getConfig, onChanged) {
   _onChanged = onChanged;
   _renderForms();
   _bindControls();
+  const cfg = _getConfig?.();
+  if (cfg) _applyGlobalToForm(cfg);
 }
 
 export function refreshOverlaysTab() {
@@ -28,6 +30,8 @@ export function refreshFromConfig() {
     _renderForms();
     _bindControls();
   }
+
+  _applyGlobalToForm(cfg);
 
   for (const id of _activeScreenIds(cfg)) {
     _applyToForm(id, cfg.screens[id] || {});
@@ -163,10 +167,6 @@ function _buildOverlayForm(screenId) {
             <label for="ov-${prefix}-infobar-clock">Show clock</label>
           </div>
           <div class="check-row">
-            <input type="checkbox" id="ov-${prefix}-infobar-clock-24h">
-            <label for="ov-${prefix}-infobar-clock-24h">24-hour clock</label>
-          </div>
-          <div class="check-row">
             <input type="checkbox" id="ov-${prefix}-infobar-current-event">
             <label for="ov-${prefix}-infobar-current-event">Show current event</label>
           </div>
@@ -209,7 +209,6 @@ function _applyToForm(screenId, sc) {
 
   _setChk(`ov-${prefix}-infobar-enabled`, sc.infoBarEnabled || false);
   _setChk(`ov-${prefix}-infobar-clock`, sc.infoBarShowClock !== false);
-  _setChk(`ov-${prefix}-infobar-clock-24h`, sc.infoBarClock24h !== false);
   _setChk(`ov-${prefix}-infobar-current-event`, sc.infoBarShowCurrentEvent !== false);
   _setChk(`ov-${prefix}-infobar-next-event`, sc.infoBarShowNextEvent !== false);
 }
@@ -292,7 +291,6 @@ function _readScreen(prefix) {
 
   sc.infoBarEnabled          = _getChk(`ov-${prefix}-infobar-enabled`);
   sc.infoBarShowClock        = _getChk(`ov-${prefix}-infobar-clock`);
-  sc.infoBarClock24h         = _getChk(`ov-${prefix}-infobar-clock-24h`);
   sc.infoBarShowCurrentEvent = _getChk(`ov-${prefix}-infobar-current-event`);
   sc.infoBarShowNextEvent    = _getChk(`ov-${prefix}-infobar-next-event`);
 
@@ -307,9 +305,38 @@ function _getMessageRows(prefix) {
     .filter(v => v.length > 0);
 }
 
+function _applyGlobalToForm(cfg) {
+  _setChk('ov-global-clock24h', cfg.clock24h !== false);
+  _setVal('ov-global-sched-style', cfg.scheduleAlertStyle || 'banner');
+  _setVal('ov-global-sched-position', cfg.scheduleAlertPosition || 'top-center');
+  _setVal('ov-global-sched-duration', cfg.scheduleAlertDurationSec ?? 18);
+}
+
+function _readGlobal() {
+  if (!_getConfig) return;
+  const cfg = _getConfig();
+  cfg.clock24h = _getChk('ov-global-clock24h');
+  cfg.scheduleAlertStyle    = _getVal('ov-global-sched-style');
+  cfg.scheduleAlertPosition = _getVal('ov-global-sched-position');
+  cfg.scheduleAlertDurationSec = parseInt(_getVal('ov-global-sched-duration') || '18', 10);
+  _onChanged?.();
+}
+
+function _bindGlobal() {
+  const changeIds = ['ov-global-clock24h', 'ov-global-sched-style', 'ov-global-sched-position'];
+  const inputIds  = ['ov-global-sched-duration'];
+  for (const id of changeIds) {
+    document.getElementById(id)?.addEventListener('change', _readGlobal);
+  }
+  for (const id of inputIds) {
+    document.getElementById(id)?.addEventListener('input', _readGlobal);
+  }
+}
+
 function _bindControls() {
   const cfg = _getConfig?.();
   if (!cfg) return;
+  _bindGlobal();
   for (const id of _activeScreenIds(cfg)) {
     _bindScreen(id);
   }
@@ -337,7 +364,6 @@ function _bindScreen(screenId) {
     `ov-${prefix}-bug-enabled`,    `ov-${prefix}-bug-corner`,
     `ov-${prefix}-qrbug-enabled`,  `ov-${prefix}-qrbug-corner`,
     `ov-${prefix}-infobar-enabled`, `ov-${prefix}-infobar-clock`,
-    `ov-${prefix}-infobar-clock-24h`,
     `ov-${prefix}-infobar-current-event`, `ov-${prefix}-infobar-next-event`,
   ];
   const inputIds = [

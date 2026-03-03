@@ -300,7 +300,7 @@ function _applyEventSlot(slot) {
 
   if (_eventTimeEl) {
     if (slot.remaining !== null && Number.isFinite(slot.remaining) && slot.remaining > 0) {
-      _eventTimeEl.textContent = `over ${_formatDuration(slot.remaining)}`;
+      _eventTimeEl.textContent = _formatDuration(slot.remaining);
       _eventTimeEl.style.display = '';
     } else {
       _eventTimeEl.style.display = 'none';
@@ -335,7 +335,7 @@ function _refreshEventSlot() {
   if (!changed) {
     // Only the countdown number ticked — update it in place without fading
     if (slot && _eventTimeEl && newTimeVisible) {
-      _eventTimeEl.textContent = `over ${_formatDuration(slot.remaining)}`;
+      _eventTimeEl.textContent = _formatDuration(slot.remaining);
     }
     return;
   }

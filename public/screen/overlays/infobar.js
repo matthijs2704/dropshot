@@ -194,10 +194,12 @@ function _formatDuration(ms) {
 }
 
 // Resolve what to show in the event slot.
-// Priority: explicit alert → current event (if enabled) → next event (if enabled).
+// Priority: explicit alert → next event inside its countdown window → current event → next event (cfm=0, always show).
 // "Current" = most recent schedule entry whose startTime is in the past and whose
 //             endTime (if set) has not yet passed.
 // "Next"    = soonest schedule entry whose startTime is in the future.
+// A next event with countdownFromMinutes > 0 takes priority over any current event once
+// the countdown window opens; this lets an imminent event preempt a stale "current".
 function _resolveEventSlot() {
   if (_alert) {
     const target = Number(new Date(_alert.countdownTo || ''));
@@ -219,6 +221,22 @@ function _resolveEventSlot() {
   const showCurrent = _cfg.infoBarShowCurrentEvent !== false;
   const showNext    = _cfg.infoBarShowNextEvent    !== false;
 
+  // Next events that are upcoming
+  const future = showNext ? sorted.filter(({ startMs }) => startMs > now) : [];
+
+  // Find the soonest next event that is inside its countdown window (cfm > 0)
+  // These take priority over the current event.
+  if (future.length) {
+    for (const { e, startMs } of future) {
+      const cfm = Number(e.countdownFromMinutes || 0);
+      if (cfm > 0 && now >= startMs - (cfm * 60 * 1000)) {
+        const name = e.name || '';
+        const loc  = e.location ? ` · ${e.location}` : '';
+        return { name: name + loc, remaining: startMs - now, targetMs: startMs, kind: 'next' };
+      }
+    }
+  }
+
   // Current: most recent entry that has already started and has not ended
   if (showCurrent) {
     const past = sorted.filter(({ startMs }) => startMs <= now);
@@ -235,18 +253,17 @@ function _resolveEventSlot() {
     }
   }
 
-  // Next: soonest upcoming entry
-  if (showNext) {
-    const future = sorted.filter(({ startMs }) => startMs > now);
-    if (future.length) {
-      const { e, startMs } = future[0];
-      // If countdownFromMinutes is set, only show once inside the countdown window
-      const cfm = Number(e.countdownFromMinutes || 0);
-      if (cfm > 0 && now < startMs - (cfm * 60 * 1000)) return null;
+  // Next: soonest upcoming entry with cfm=0 (always visible, no window restriction)
+  if (future.length) {
+    const { e, startMs } = future[0];
+    const cfm = Number(e.countdownFromMinutes || 0);
+    if (cfm === 0) {
       const name = e.name || '';
       const loc  = e.location ? ` · ${e.location}` : '';
       return { name: name + loc, remaining: startMs - now, targetMs: startMs, kind: 'next' };
     }
+    // cfm > 0 but we're not yet in the window — nothing to show
+    return null;
   }
 
   return null;

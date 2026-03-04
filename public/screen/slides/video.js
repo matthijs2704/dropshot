@@ -2,21 +2,21 @@
 // Returns a Promise that resolves when the video has finished playing
 // (or when durationSec elapses for looping videos).
 
+import { el } from '../../shared/utils.js';
+
 /**
  * @param {object} slide  – the slide object from the library
  * @returns {{ el: HTMLElement, play: () => Promise<void> }}
  */
 export function buildVideoSlide(slide) {
-  const wrap = document.createElement('div');
-  wrap.className = 'slide-video';
-
-  const video = document.createElement('video');
-  video.src     = `/slide-assets/videos/${encodeURIComponent(slide.filename)}`;
-  video.muted   = slide.muted !== false;
-  video.preload = 'auto';
+  const video = el('video', {
+    src: `/slide-assets/videos/${encodeURIComponent(slide.filename)}`,
+    attrs: { preload: 'auto' },
+  });
+  video.muted       = slide.muted !== false;
   video.playsInline = true;
 
-  wrap.appendChild(video);
+  const wrap = el('div', { cls: 'slide-video' }, video);
 
   const playCount = typeof slide.playCount === 'number' ? slide.playCount : 1;
 

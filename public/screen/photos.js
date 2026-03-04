@@ -227,6 +227,33 @@ function _isPortrait(photo) {
   return _aspectRatio(photo) < 1.0;
 }
 
+/**
+ * Does the photo match the requested orientation?
+ * Returns false when orientation is 'any'.
+ *
+ * @param {Object} photo
+ * @param {'any'|'portrait'|'landscape'} orientation
+ * @returns {boolean}
+ */
+function _matchesOrientation(photo, orientation) {
+  if (orientation === 'any') return false;
+  const portrait = _isPortrait(photo);
+  return orientation === 'portrait' ? portrait : !portrait;
+}
+
+/**
+ * Should the photo be hard-excluded based on orientation enforcement?
+ *
+ * @param {Object} photo
+ * @param {'any'|'portrait'|'landscape'} orientation
+ * @param {boolean} enforce
+ * @returns {boolean}
+ */
+function _failsOrientationFilter(photo, orientation, enforce) {
+  if (!enforce || orientation === 'any') return false;
+  return !_matchesOrientation(photo, orientation);
+}
+
 // ---------------------------------------------------------------------------
 // Weighted-random pick (no queue — O(n) scoring pass)
 // ---------------------------------------------------------------------------
@@ -278,13 +305,11 @@ export function pickPhotos(count, cfg, excludeIds = [], hardExcludeOtherScreen =
 
       const isPortrait = _isPortrait(photo);
 
-      if (orientation === 'landscape' && enforceOrientation && isPortrait) continue;
-      if (orientation === 'portrait' && enforceOrientation && !isPortrait) continue;
+      if (_failsOrientationFilter(photo, orientation, enforceOrientation)) continue;
 
       let w = _photoWeight(photo, recencyMap, now);
-      if (!enforceOrientation && orientation !== 'any') {
-        const matchesOrientation = orientation === 'portrait' ? isPortrait : !isPortrait;
-        if (matchesOrientation) w *= orientationBoost;
+      if (!enforceOrientation && _matchesOrientation(photo, orientation)) {
+        w *= orientationBoost;
       }
       const shownAt = recentlyShown.get(photo.id) || 0;
       const isHardRecent = avoidRecentMs > 0 && (now - shownAt) < avoidRecentMs;
@@ -393,9 +418,7 @@ export function pickHeroPhoto(cfg, heroLocks, myScreenId, options = {}) {
   const candidates = [];
 
   for (const photo of pool) {
-    const isPortrait = _isPortrait(photo);
-    if (orientation === 'landscape' && enforceOrientation && isPortrait) continue;
-    if (orientation === 'portrait' && enforceOrientation && !isPortrait) continue;
+    if (_failsOrientationFilter(photo, orientation, enforceOrientation)) continue;
 
     // Cross-screen lock check
     const lock = heroLocks.get(photo.id);
@@ -413,9 +436,8 @@ export function pickHeroPhoto(cfg, heroLocks, myScreenId, options = {}) {
     let w = _photoWeight(photo, recencyMap, now);
     if (photo.heroCandidate) w = (w / HERO_CANDIDATE_BOOST) * HERO_CANDIDATE_HERO_BOOST;
 
-    if (!enforceOrientation && orientation !== 'any') {
-      const matchesOrientation = orientation === 'portrait' ? isPortrait : !isPortrait;
-      if (matchesOrientation) w *= orientationBoost;
+    if (!enforceOrientation && _matchesOrientation(photo, orientation)) {
+      w *= orientationBoost;
     }
 
     candidates.push({ photo, w });
@@ -447,20 +469,11 @@ export function pickNewestPhotos(count, cfg, excludeIds = [], options = {}) {
 
   const candidates = pool
     .filter(p => !excludeSet.has(p.id))
-    .filter(p => {
-      if (!enforceOrientation) return true;
-      if (orientation === 'landscape') return !_isPortrait(p);
-      if (orientation === 'portrait') return _isPortrait(p);
-      return true;
-    });
+    .filter(p => !_failsOrientationFilter(p, orientation, enforceOrientation));
 
   const sorted = candidates.sort((a, b) => {
-    const aMatch = orientation === 'any'
-      ? false
-      : (orientation === 'portrait' ? _isPortrait(a) : !_isPortrait(a));
-    const bMatch = orientation === 'any'
-      ? false
-      : (orientation === 'portrait' ? _isPortrait(b) : !_isPortrait(b));
+    const aMatch = _matchesOrientation(a, orientation);
+    const bMatch = _matchesOrientation(b, orientation);
 
     const aScore = (a.addedAt || 0) + (!enforceOrientation && aMatch ? orientationBonusMs : 0);
     const bScore = (b.addedAt || 0) + (!enforceOrientation && bMatch ? orientationBonusMs : 0);

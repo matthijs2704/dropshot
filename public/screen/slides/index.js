@@ -144,7 +144,10 @@ export async function runNextSlide(currentDisplayEl) {
     else if (slide.type === 'image')     built = buildImageSlide(slide);
     else if (slide.type === 'article')   built = await buildArticleSlide(slide);
     else return false;
-  } catch { return false; }
+  } catch (err) {
+    console.warn('[slides] failed to build slide', slide.id, slide.type, err.message);
+    return false;
+  }
 
   const { el, play } = built;
 

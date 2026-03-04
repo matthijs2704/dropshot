@@ -62,6 +62,7 @@ let _ws              = null;
 let _recentTemplates = [];
 let _cycleTimer      = null;
 let _running         = false;
+let _destroyCurrent  = null;    // cleanup fn from current layout (e.g. submission wall paging)
 let _photoCycleCount = 0;   // counts photo layouts since last slide interleave
 let _lastSubmissionWallAt = Date.now();
 
@@ -104,6 +105,7 @@ export function startCycle() {
 export function stopCycle() {
   _running = false;
   if (_cycleTimer) { clearTimeout(_cycleTimer); _cycleTimer = null; }
+  if (_destroyCurrent) { _destroyCurrent(); _destroyCurrent = null; }
 }
 
 // ---------------------------------------------------------------------------
@@ -288,6 +290,9 @@ async function runCycle() {
   }
 
   // ── Build the chosen layout ──────────────────────────────────────────────
+  // Tear down previous layout (e.g. submission wall paging timers)
+  if (_destroyCurrent) { _destroyCurrent(); _destroyCurrent = null; }
+
   let result;
   if (layoutType === 'submissionwall') {
     result = _buildSubmissionWallLayout(cycleStart, submissionMode, hasSubmissions, hideWhenEmpty, wallOptions);
@@ -302,6 +307,7 @@ async function runCycle() {
   const duration = result.duration || cfg.layoutDuration || DEFAULT_LAYOUT_DUR_MS;
 
   displayState.layoutType = resolvedType;
+  _destroyCurrent = built.destroy || null;
 
   const newEl      = built.el;
   const visibleIds = built.visibleIds;

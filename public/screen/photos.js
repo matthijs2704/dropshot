@@ -92,22 +92,44 @@ export function setOtherVisibleIds(ids) {
 // Periodic cleanup
 // ---------------------------------------------------------------------------
 
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, ts] of _recentlyShown) {
-    if (now - ts > RECENTLY_SHOWN_TTL_MS) _recentlyShown.delete(id);
-  }
-  for (const [id, ts] of _heroShownAt) {
-    if (now - ts > HERO_SHOWN_TTL_MS) _heroShownAt.delete(id);
-  }
+let _cleanupTimer = null;
 
-  // Periodically halve all show-counts so long-running events don't accumulate
-  // unbounded numbers. Halving preserves relative order while preventing overflow.
-  if (_showCounts.size > 0) {
-    let maxCount = 0;
-    for (const c of _showCounts.values()) { if (c > maxCount) maxCount = c; }
-    if (maxCount > SHOW_COUNT_HALVE_THRESH) {
-      for (const [id, c] of _showCounts) _showCounts.set(id, Math.floor(c / 2));
+function _startCleanup() {
+  if (_cleanupTimer) return;
+  _cleanupTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [id, ts] of _recentlyShown) {
+      if (now - ts > RECENTLY_SHOWN_TTL_MS) _recentlyShown.delete(id);
     }
-  }
-}, CLEANUP_INTERVAL_MS);
+    for (const [id, ts] of _heroShownAt) {
+      if (now - ts > HERO_SHOWN_TTL_MS) _heroShownAt.delete(id);
+    }
+
+    // Periodically halve all show-counts so long-running events don't accumulate
+    // unbounded numbers. Halving preserves relative order while preventing overflow.
+    if (_showCounts.size > 0) {
+      let maxCount = 0;
+      for (const c of _showCounts.values()) { if (c > maxCount) maxCount = c; }
+      if (maxCount > SHOW_COUNT_HALVE_THRESH) {
+        for (const [id, c] of _showCounts) _showCounts.set(id, Math.floor(c / 2));
+      }
+    }
+  }, CLEANUP_INTERVAL_MS);
+}
+
+/**
+ * Reset all photo state and restart the cleanup timer.
+ * Called on WebSocket reconnect to avoid stacking intervals.
+ */
+export function resetPhotoState() {
+  photoRegistry.clear();
+  _recentlyShown.clear();
+  _heroShownAt.clear();
+  _showCounts.clear();
+  otherScreenVisibleIds = new Set();
+  if (_cleanupTimer) { clearInterval(_cleanupTimer); _cleanupTimer = null; }
+  _startCleanup();
+}
+
+// Start cleanup on initial module load
+_startCleanup();

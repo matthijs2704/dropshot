@@ -7,6 +7,7 @@ import {
   removePhotos,
   updatePhoto,
   setOtherVisibleIds,
+  resetPhotoState,
 } from './photos.js';
 import {
   initCycle,
@@ -127,6 +128,7 @@ function connect() {
     stopCycle();
     removeAllOverlays();
     hideSyncStatus();
+    resetPhotoState();
     if (cycleStartTimer) {
       clearTimeout(cycleStartTimer);
       cycleStartTimer = null;

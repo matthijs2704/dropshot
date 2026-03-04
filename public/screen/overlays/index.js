@@ -3,6 +3,7 @@
 import { mountTicker, removeTicker }   from './ticker.js';
 import { mountBug, removeBug }         from './bug.js';
 import { mountQrBug, removeQrBug }     from './qr-bug.js';
+import { filterTickerMessages }        from './_overlay-utils.js';
 import { setAlertSnapshot, showAlert, dismissAlert, clearAlerts, setBottomInset } from './alerts.js';
 import {
   mountInfoBar,
@@ -46,7 +47,7 @@ export async function applyOverlays(config) {
   } else {
     removeInfoBar();
     // Standalone ticker
-    const _hasTickerContent = Array.isArray(cfg.tickerMessages) && cfg.tickerMessages.some(m => m && m.trim());
+    const _hasTickerContent = filterTickerMessages(cfg.tickerMessages).length > 0;
     if (cfg.tickerEnabled && _hasTickerContent) {
       mountTicker(cfg);
       const tickerEl = document.getElementById('overlay-ticker');

@@ -8,8 +8,8 @@
 //
 // Themeable via CSS custom properties; all have sensible fallbacks.
 
-import { fmtDuration, el }                     from '../../../shared/utils.js';
-import { startTickerScroll, startTickerFade } from './_overlay-utils.js';
+import { fmtDuration, el }                                      from '../../../shared/utils.js';
+import { startTickerScroll, startTickerFade, filterTickerMessages } from './_overlay-utils.js';
 
 const EVENT_FADE_MS       = 370;   // fade-out duration for event slot transitions
 const COUNTDOWN_TICK_MS   = 500;   // countdown refresh interval
@@ -429,7 +429,7 @@ function _buildBar(cfg) {
   }
 
   // Ticker slot — only shown when ticker is enabled and has messages
-  const rawMessages = Array.isArray(cfg.tickerMessages) ? cfg.tickerMessages.filter(m => m && m.trim()) : [];
+  const rawMessages = filterTickerMessages(cfg.tickerMessages);
 
   if (cfg.tickerEnabled && rawMessages.length) {
     const mode  = cfg.tickerMode  || 'scroll';
@@ -476,7 +476,7 @@ export function mountInfoBar(cfg, schedule) {
   _schedule = Array.isArray(schedule) ? schedule : [];
 
   // Prepare fade-mode state
-  _tickerMessages = Array.isArray(_cfg.tickerMessages) ? _cfg.tickerMessages.filter(m => m && m.trim()) : [];
+  _tickerMessages = filterTickerMessages(_cfg.tickerMessages);
   _tickerDwellMs  = Math.max(500, (Number(_cfg.tickerFadeDwellSec) || 5) * 1000);
 
   _barEl = _buildBar(_cfg);

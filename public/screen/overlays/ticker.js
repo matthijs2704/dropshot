@@ -13,8 +13,8 @@
 // the original hardcoded defaults so the ticker looks identical when no theme
 // is active.
 
-import { startTickerScroll, startTickerFade } from './_overlay-utils.js';
-import { el }                                  from '../../../shared/utils.js';
+import { startTickerScroll, startTickerFade, filterTickerMessages } from './_overlay-utils.js';
+import { el }                                                       from '../../../shared/utils.js';
 
 let _tickerEl  = null;
 let _stopAnim  = () => {};
@@ -51,7 +51,7 @@ function _justifyContent(align) {
 export function mountTicker(cfg) {
   removeTicker();
 
-  const messages = Array.isArray(cfg.tickerMessages) ? cfg.tickerMessages.filter(m => m && m.trim()) : [];
+  const messages = filterTickerMessages(cfg.tickerMessages);
 
   if (!cfg.tickerEnabled || !messages.length) return;
 

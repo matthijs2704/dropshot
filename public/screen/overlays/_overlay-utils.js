@@ -1,6 +1,17 @@
 // Shared helpers for screen overlay modules.
 
 /**
+ * Filter an array of ticker messages, keeping only non-empty/non-whitespace strings.
+ * Safely handles non-array input by returning an empty array.
+ *
+ * @param {*} messages - cfg.tickerMessages (may be undefined/null/non-array)
+ * @returns {string[]}
+ */
+export function filterTickerMessages(messages) {
+  return Array.isArray(messages) ? messages.filter(m => m && m.trim()) : [];
+}
+
+/**
  * Build an inline style string that positions an overlay element in one of
  * the four screen corners, honouring safe-area insets and a set of CSS custom
  * properties for per-element nudging.

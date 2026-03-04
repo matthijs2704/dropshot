@@ -2,7 +2,7 @@
 
 import { applySmartFit }  from '../fit.js';
 import { startKenBurns }  from '../transitions.js';
-import { photoUrl }       from '../../shared/utils.js';
+import { el, photoUrl }   from '../../shared/utils.js';
 
 /**
  * Build a side-by-side layout element.
@@ -11,21 +11,17 @@ import { photoUrl }       from '../../shared/utils.js';
  * @returns {{ el: HTMLElement, visibleIds: string[], startMotion: Function }}
  */
 export function buildSideBySide(photos) {
-  const el = document.createElement('div');
-  el.className = 'layout layout-sidebyside';
+  const rootEl = el('div', { cls: 'layout layout-sidebyside' });
 
   const visibleIds = [];
   const imgs       = [];
 
   for (let i = 0; i < 2; i++) {
     const photo = photos[i];
-    const slot  = document.createElement('div');
-    slot.className = 'sbs-slot';
+    const slot  = el('div', { cls: 'sbs-slot' });
 
     if (photo) {
-      const img = document.createElement('img');
-      img.src   = photoUrl(photo);
-      img.alt   = photo.name;
+      const img = el('img', { src: photoUrl(photo), alt: photo.name });
       applySmartFit(img, photo, true); // each half-slot is portrait (≈0.89 ratio)
       slot.appendChild(img);
       slot.dataset.photoId = photo.id;
@@ -35,11 +31,11 @@ export function buildSideBySide(photos) {
       slot.classList.add('sbs-slot-empty');
     }
 
-    el.appendChild(slot);
+    rootEl.appendChild(slot);
   }
 
   return {
-    el,
+    el: rootEl,
     visibleIds,
     /** Call after layout transition completes, passing layoutDuration. */
     startMotion: (durationMs) => {

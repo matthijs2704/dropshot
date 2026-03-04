@@ -9,7 +9,7 @@
 //   popup:     center (default) | top-center | bottom-center
 //   countdown: top-right | top-left | bottom-right | bottom-left
 
-import { fmtDuration } from '../../../shared/utils.js';
+import { fmtDuration, el } from '../../../shared/utils.js';
 
 const _active = new Map(); // alertId -> { alert, el, timeout }
 let _countdownTimer = null;
@@ -82,34 +82,24 @@ function _buildEl(alert) {
   const posCls   = _positionClasses(style, alert.position);
   const urgentCls = alert.priority === 'urgent' ? 'urgent' : '';
 
-  const el = document.createElement('div');
-  el.className = ['ov-alert', style, urgentCls, ...posCls].filter(Boolean).join(' ');
-  el.dataset.alertId = alert.id;
+  const cls = ['ov-alert', style, urgentCls, ...posCls].filter(Boolean).join(' ');
 
   if (style === 'banner') {
-    el.textContent = alert.message || '';
-    return el;
+    return el('div', { cls, attrs: { 'data-alert-id': alert.id }, text: alert.message || '' });
   }
 
-  const title = document.createElement('div');
-  title.className = 'ov-alert-title';
-  title.textContent = alert.priority === 'urgent' ? 'urgent update' : 'event update';
-  el.appendChild(title);
-
-  const message = document.createElement('div');
-  message.className = 'ov-alert-message';
-  message.textContent = alert.message || '';
-  el.appendChild(message);
+  const titleText = alert.priority === 'urgent' ? 'urgent update' : 'event update';
+  const rootEl = el('div', { cls, attrs: { 'data-alert-id': alert.id } },
+    el('div', { cls: 'ov-alert-title',   text: titleText }),
+    el('div', { cls: 'ov-alert-message', text: alert.message || '' }),
+  );
 
   if (style === 'countdown') {
-    const time = document.createElement('div');
-    time.className = 'ov-alert-time';
-    time.dataset.countdown = alert.countdownTo || '';
-    time.textContent = '--:--';
-    el.appendChild(time);
+    const timeEl = el('div', { cls: 'ov-alert-time', attrs: { 'data-countdown': alert.countdownTo || '' }, text: '--:--' });
+    rootEl.appendChild(timeEl);
   }
 
-  return el;
+  return rootEl;
 }
 
 /* ── Countdown ticker ─────────────────────────────────────────────────── */

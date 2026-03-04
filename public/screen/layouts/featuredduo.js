@@ -2,17 +2,16 @@
 // Similar to side-by-side but unequal — the hero gets much more real estate,
 // the supporting photo still breathes on its own rather than being buried in a grid.
 
-import { applySmartFit } from '../fit.js';
-import { startKenBurns } from '../transitions.js';
-import { photoUrl }      from '../../shared/utils.js';
+import { applySmartFit }  from '../fit.js';
+import { startKenBurns }  from '../transitions.js';
+import { el, photoUrl }   from '../../shared/utils.js';
 
 /**
  * @param {Object[]} photos - Expects at least 2 photos; [0] = hero, [1] = support
  * @returns {{ el, visibleIds, startMotion }}
  */
 export function buildFeaturedDuo(photos) {
-  const el = document.createElement('div');
-  el.className = 'layout layout-featuredduo';
+  const rootEl = el('div', { cls: 'layout layout-featuredduo' });
 
   const visibleIds = [];
   const imgs       = [];
@@ -25,13 +24,10 @@ export function buildFeaturedDuo(photos) {
   for (let i = 0; i < 2; i++) {
     const photo   = photos[i];
     const def     = defs[i];
-    const slot    = document.createElement('div');
-    slot.className = 'fd-slot';
+    const slot    = el('div', { cls: 'fd-slot' });
 
     if (photo) {
-      const img = document.createElement('img');
-      img.src   = photoUrl(photo);
-      img.alt   = photo.name;
+      const img = el('img', { src: photoUrl(photo), alt: photo.name });
       applySmartFit(img, photo, def.portrait);
       slot.appendChild(img);
       slot.dataset.photoId = photo.id;
@@ -42,11 +38,11 @@ export function buildFeaturedDuo(photos) {
       slot.classList.add('fd-slot-empty');
     }
 
-    el.appendChild(slot);
+    rootEl.appendChild(slot);
   }
 
   return {
-    el,
+    el: rootEl,
     visibleIds,
     startMotion: (durationMs) => {
       for (const img of imgs) startKenBurns(img, durationMs);

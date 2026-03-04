@@ -1,8 +1,8 @@
 // Fullscreen layout: one photo fills the entire screen
 
-import { applySmartFit }  from '../fit.js';
-import { startKenBurns }  from '../transitions.js';
-import { photoUrl }       from '../../shared/utils.js';
+import { applySmartFit }       from '../fit.js';
+import { startKenBurns }       from '../transitions.js';
+import { el, photoUrl }        from '../../shared/utils.js';
 
 /**
  * Build a fullscreen layout element.
@@ -11,25 +11,20 @@ import { photoUrl }       from '../../shared/utils.js';
  * @returns {{ el: HTMLElement, visibleIds: string[], startMotion: Function }}
  */
 export function buildFullscreen(photo) {
-  const el = document.createElement('div');
-  el.className = 'layout layout-fullscreen';
+  const rootEl = el('div', { cls: 'layout layout-fullscreen' });
 
   if (!photo) {
-    return { el, visibleIds: [], startMotion: () => {} };
+    return { el: rootEl, visibleIds: [], startMotion: () => {} };
   }
 
-  const wrap = document.createElement('div');
-  wrap.className = 'fs-wrap';
-
-  const img = document.createElement('img');
-  img.src   = photoUrl(photo);
-  img.alt   = photo.name;
+  const wrap = el('div', { cls: 'fs-wrap' });
+  const img  = el('img', { src: photoUrl(photo), alt: photo.name });
   applySmartFit(img, photo, false); // fullscreen slot is always landscape
   wrap.appendChild(img);
-  el.appendChild(wrap);
+  rootEl.appendChild(wrap);
 
   return {
-    el,
+    el: rootEl,
     visibleIds: [photo.id],
     /** Call after the layout transition completes, passing layoutDuration. */
     startMotion: (durationMs) => startKenBurns(img, durationMs),

@@ -114,6 +114,7 @@ function defaultConfig() {
     sessionSecret: null,
     theme: null,
     clock24h: true,
+    infoBarFontSize: 15,
     scheduleAlertStyle: 'banner',
     scheduleAlertPosition: 'top-center',
     scheduleAlertDurationSec: 18,
@@ -698,6 +699,11 @@ function sanitizeGlobalConfig(input, target, validThemeIds) {
 
   if (Object.prototype.hasOwnProperty.call(input, 'clock24h')) {
     target.clock24h = Boolean(input.clock24h);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'infoBarFontSize')) {
+    const v = Number(input.infoBarFontSize);
+    if (Number.isFinite(v)) target.infoBarFontSize = Math.max(8, Math.min(60, Math.floor(v)));
   }
 
   if (Object.prototype.hasOwnProperty.call(input, 'scheduleAlertStyle')) {

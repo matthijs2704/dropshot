@@ -85,6 +85,8 @@ function _removeTheme() {
   document.getElementById(LINK_ID)?.remove();
   document.getElementById(FRAME_ID)?.remove();
   document.getElementById(FONTS_ID)?.remove();
+  // Remove any hoisted frame elements that were appended directly to body
+  document.querySelectorAll('[data-theme-hoist]').forEach(el => el.remove());
 }
 
 function _injectFonts(themeId, fontFaces) {
@@ -113,8 +115,20 @@ function _injectFrame(html) {
   // Ensure the frame never captures pointer events so the screen player
   // interaction model (non-existent for kiosk) is not affected, and overlays
   // such as ticker/bug still work correctly.
-  wrapper.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:100;';
-  wrapper.appendChild(tpl.content.cloneNode(true));
+  // (Positioned and pointer-events:none via #theme-frame rule in screen.css)
+
+  // Elements marked data-hoist are appended directly to <body> so they are not
+  // trapped inside the wrapper's stacking context (z-index:100).  They are
+  // tagged with data-theme-hoist so _removeTheme() can clean them up.
+  const fragment = tpl.content.cloneNode(true);
+  fragment.querySelectorAll('[data-hoist]').forEach(el => {
+    el.removeAttribute('data-hoist');
+    el.setAttribute('data-theme-hoist', '');
+    // pointer-events:none applied via [data-theme-hoist] rule in screen.css
+    document.body.appendChild(el);
+  });
+
+  wrapper.appendChild(fragment);
 
   document.body.appendChild(wrapper);
 }

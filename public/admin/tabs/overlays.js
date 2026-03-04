@@ -307,6 +307,7 @@ function _getMessageRows(prefix) {
 
 function _applyGlobalToForm(cfg) {
   _setChk('ov-global-clock24h', cfg.clock24h !== false);
+  _setVal('ov-global-infobar-font-size', cfg.infoBarFontSize ?? 15);
   _setVal('ov-global-sched-style', cfg.scheduleAlertStyle || 'banner');
   _setVal('ov-global-sched-position', cfg.scheduleAlertPosition || 'top-center');
   _setVal('ov-global-sched-duration', cfg.scheduleAlertDurationSec ?? 18);
@@ -316,6 +317,7 @@ function _readGlobal() {
   if (!_getConfig) return;
   const cfg = _getConfig();
   cfg.clock24h = _getChk('ov-global-clock24h');
+  cfg.infoBarFontSize = parseInt(_getVal('ov-global-infobar-font-size') || '15', 10);
   cfg.scheduleAlertStyle    = _getVal('ov-global-sched-style');
   cfg.scheduleAlertPosition = _getVal('ov-global-sched-position');
   cfg.scheduleAlertDurationSec = parseInt(_getVal('ov-global-sched-duration') || '18', 10);
@@ -324,7 +326,7 @@ function _readGlobal() {
 
 function _bindGlobal() {
   const changeIds = ['ov-global-clock24h', 'ov-global-sched-style', 'ov-global-sched-position'];
-  const inputIds  = ['ov-global-sched-duration'];
+  const inputIds  = ['ov-global-sched-duration', 'ov-global-infobar-font-size'];
   for (const id of changeIds) {
     document.getElementById(id)?.addEventListener('change', _readGlobal);
   }

@@ -32,8 +32,8 @@ export function initOverlays(screenId) {
  */
 export async function applyOverlays(config) {
   const cfg = config?.screens?.[String(_screenId)] || config?.screens?.['1'] || {};
-  // Merge global clock24h into the screen cfg so infobar can read it
-  const cfgWithGlobals = { ...cfg, clock24h: config?.clock24h !== false };
+  // Merge global fields into the screen cfg so infobar can read them
+  const cfgWithGlobals = { ...cfg, clock24h: config?.clock24h !== false, infoBarFontSize: config?.infoBarFontSize ?? 15 };
 
   let safeInsets = { top: 0, bottom: 0 };
 

@@ -76,6 +76,52 @@ export function esc(str) {
 }
 
 /**
+ * Create a DOM element with optional properties and children.
+ * @param {string} tag - Element tag name
+ * @param {object} [props]
+ * @param {string}   [props.cls]    - className
+ * @param {string}   [props.id]     - id
+ * @param {string}   [props.text]   - textContent
+ * @param {string}   [props.src]    - src attribute
+ * @param {string}   [props.alt]    - alt attribute
+ * @param {string}   [props.href]   - href attribute
+ * @param {object}   [props.data]   - dataset entries
+ * @param {object}   [props.styles] - inline style entries (camelCase)
+ * @param {object}   [props.attrs]  - arbitrary attributes via setAttribute
+ * @param {...Node}  children       - child nodes to append
+ * @returns {HTMLElement}
+ */
+export function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  if (props.cls)   node.className   = props.cls;
+  if (props.id)    node.id          = props.id;
+  if (props.text)  node.textContent = props.text;
+  if (props.src)   node.src         = props.src;
+  if (props.alt)   node.alt         = props.alt;
+  if (props.href)  node.href        = props.href;
+  if (props.data)   for (const [k, v] of Object.entries(props.data))   node.dataset[k]       = v;
+  if (props.styles) for (const [k, v] of Object.entries(props.styles)) node.style[k]         = v;
+  if (props.attrs)  for (const [k, v] of Object.entries(props.attrs))  node.setAttribute(k, v);
+  for (const child of children) if (child) node.appendChild(child);
+  return node;
+}
+
+/**
+ * Format a millisecond duration as MM:SS or HH:MM:SS.
+ * @param {number} ms
+ * @returns {string}
+ */
+export function fmtDuration(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const pad = n => String(n).padStart(2, '0');
+  if (h > 0) return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  return `${pad(m)}:${pad(s)}`;
+}
+
+/**
  * Return the sorted list of active screen IDs for a config object.
  * @param {{ screenCount?: number, screens?: object }} cfg
  * @returns {string[]}

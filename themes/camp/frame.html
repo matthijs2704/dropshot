@@ -3,10 +3,25 @@
   #theme-frame {
     /* Elevate above slides but below any UI chrome */
     z-index: 9000 !important;
-    background-image: url("/themes/camp/assets/frame.png") !important;
-    background-size: fill !important;
   }
-  
+
+  #theme-top-accessory {
+    background-image: url("/themes/camp/assets/top-accessory.png") !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    position: absolute;
+    top: -1rem;
+    left: 12.5vw;
+    width: 75vw;
+    height: 15vh;
+  }
+
+  #theme-bottom-right-accessory {
+    background-image: url("/themes/camp/assets/bottom-right-logo.png") !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+  }
+
   /* Subtle vignette */
   #theme-frame .vignette {
     position: absolute;
@@ -18,15 +33,148 @@
     );
   }
 
-  /* Bottom bar with logo, center */
-  #logo-bottom-bar {
-    position: absolute;
-    width: 45vw;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 9001 !important; /* Above the frame */
+  /* Gold gradient rule that sits at the top edge of the infobar */
+  #infobar-gold-border {
+    position: fixed;
+    bottom: var(--infobar-height, 60px);
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(
+      90deg,
+      transparent                  0%,
+      rgba(120,  80,  10, 0.0)     2%,
+      rgba(180, 120,  20, 0.6)     8%,
+      rgba(255, 210,  80, 0.95)   20%,
+      rgba(255, 240, 140, 1.0)    35%,
+      rgba(255, 255, 200, 1.0)    50%,
+      rgba(255, 240, 140, 1.0)    65%,
+      rgba(255, 210,  80, 0.95)   80%,
+      rgba(180, 120,  20, 0.6)    92%,
+      rgba(120,  80,  10, 0.0)    98%,
+      transparent                 100%
+    );
+    z-index: 9150;
+    pointer-events: none;
   }
+
+  /* Bottom-right logo — sits above the right end of the info bar */
+  #logo-bottom-bar {
+    position: fixed;
+    height: auto;
+    height: 25vh;
+    width: auto;
+    bottom: 0;
+    right: -3vw;
+    z-index: 9200;
+    pointer-events: none;
+    display: block;
+  }
+
+  #rsw-frame {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9000;
+}
+
+/* Top magical energy line */
+.energy-top {
+  position: absolute;
+  top: 0;
+  left: 10%;
+  width: 80%;
+  height: 4px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    #8b5a12,
+    #ffcc55,
+    #fff2a6,
+    #66b3ff,
+    #8b5a12,
+    transparent
+  );
+  box-shadow:
+    0 0 8px rgba(255,180,60,0.6),
+    0 0 18px rgba(100,170,255,0.4);
+}
+
+/* Subtle vertical edge glow */
+.edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  opacity: 0.6;
+}
+
+.edge.left {
+  left: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(255,160,40,0.5),
+    rgba(100,160,255,0.4),
+    transparent
+  );
+  box-shadow: 0 0 12px rgba(255,140,0,0.3);
+}
+
+.edge.right {
+  right: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(100,160,255,0.4),
+    rgba(255,160,40,0.5),
+    transparent
+  );
+  box-shadow: 0 0 12px rgba(255,140,0,0.3);
+}
+
+/* Very subtle arcane corner aura */
+.corner-glow {
+  position: absolute;
+  width: 18vw;
+  height: 18vw;
+  pointer-events: none;
+  opacity: 0.25;
+}
+
+.corner-glow.tl {
+  top: 0;
+  left: 0;
+  background: radial-gradient(
+    circle at top left,
+    rgba(255,200,80,0.6),
+    rgba(100,160,255,0.4),
+    transparent 70%
+  );
+}
+
+.corner-glow.br {
+  bottom: 0;
+  right: 0;
+  background: radial-gradient(
+    circle at bottom right,
+    rgba(100,160,255,0.5),
+    rgba(255,160,40,0.5),
+    transparent 70%
+  );
+}
 </style>
 
+<div id="rsw-frame">
+  <!--<div class="energy-top"></div>-->
+  <div class="edge left"></div>
+  <div class="edge right"></div>
+  <div class="corner-glow tl"></div>
+  <div class="corner-glow br"></div>
+</div>
+
 <div class="vignette"></div>
+<div id="theme-top-accessory" data-hoist></div>
+<div id="theme-bottom-right-accessory" data-hoist></div>
+<div id="infobar-gold-border" data-hoist></div>
+<img id="logo-bottom-bar" src="/themes/camp/assets/bottom-right-logo.png" alt="" data-hoist>

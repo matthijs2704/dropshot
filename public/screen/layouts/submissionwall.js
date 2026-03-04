@@ -1,251 +1,9 @@
+import { el } from '../../shared/utils.js';
+
 // Social wall layout — polaroid-card style.
 // Cards have a fixed intrinsic size and are centred on the background;
 // they never stretch to fill a cell. Pages crossfade when there are more
 // submissions than fit on one screen.
-
-let _styleInjected = false;
-
-function _ensureStyle() {
-  if (_styleInjected) return;
-  _styleInjected = true;
-
-  const style = document.createElement('style');
-  style.id = 'submission-wall-layout-style';
-  style.textContent = `
-    .sw-layout {
-      position: absolute;
-      inset: 0;
-      padding-top:    var(--screen-padding-top,    var(--screen-padding, 0px));
-      padding-right:  var(--screen-padding-right,  var(--screen-padding, 0px));
-      padding-bottom: var(--screen-padding-bottom, var(--screen-padding, 0px));
-      padding-left:   var(--screen-padding-left,   var(--screen-padding, 0px));
-      background:
-        radial-gradient(110% 80% at 50% 0%, rgba(255, 255, 255, 0.08), transparent 60%),
-        linear-gradient(165deg, rgba(0,0,0,0.18), rgba(0,0,0,0.05) 46%, transparent 72%),
-        var(--submission-wall-bg, var(--polaroid-bg, #1b130c));
-      overflow: hidden;
-      isolation: isolate;
-    }
-
-    .sw-layout::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      background:
-        radial-gradient(circle at 25% 18%, rgba(255,255,255,0.05) 0%, transparent 36%),
-        radial-gradient(circle at 80% 84%, rgba(255,255,255,0.04) 0%, transparent 38%),
-        radial-gradient(ellipse at 50% 50%, transparent 44%, rgba(0, 0, 0, 0.48) 100%);
-      z-index: 0;
-    }
-
-    /* ── Page ────────────────────────────────────────────────────────────── */
-
-    .sw-page {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: var(--sw-gap);
-      padding: var(--sw-pad);
-      z-index: 1;
-    }
-
-    .sw-page.sw-page-enter {
-      animation: sw-page-in 600ms cubic-bezier(0.22, 0.9, 0.28, 1) both;
-    }
-
-    .sw-page.sw-page-exit {
-      animation: sw-page-out 380ms cubic-bezier(0.4, 0, 1, 0.8) both;
-    }
-
-    @keyframes sw-page-in {
-      from { opacity: 0; transform: translateY(24px) scale(0.97); }
-      to   { opacity: 1; transform: translateY(0)    scale(1); }
-    }
-
-    @keyframes sw-page-out {
-      from { opacity: 1; transform: translateY(0)      scale(1); }
-      to   { opacity: 0; transform: translateY(-18px)  scale(0.97); }
-    }
-
-    /* ── Row ─────────────────────────────────────────────────────────────── */
-
-    .sw-row {
-      display: flex;
-      flex-direction: row;
-      align-items: flex-start;
-      justify-content: center;
-      gap: var(--sw-gap);
-    }
-
-    /* ── Card ────────────────────────────────────────────────────────────── */
-
-    /* Cards are sized by CSS custom properties set inline by JS */
-    .sw-card {
-      flex: none;              /* never stretch */
-      width:  var(--sw-card-w);
-      background: var(--polaroid-card-bg, #fffef8);
-      border-radius: var(--polaroid-card-radius, 8px);
-      box-shadow: var(--polaroid-card-shadow,
-        0 18px 44px rgba(0,0,0,0.55),
-        0 5px 14px rgba(0,0,0,0.32));
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      transform: rotate(var(--sw-rot, 0deg));
-      animation: sw-card-in var(--sw-card-dur, 480ms) cubic-bezier(0.22, 0.9, 0.28, 1) var(--sw-delay, 0ms) both;
-    }
-
-    @keyframes sw-card-in {
-      from {
-        opacity: 0;
-        transform: translateY(20px) scale(0.93) rotate(var(--sw-rot, 0deg));
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0) scale(1) rotate(var(--sw-rot, 0deg));
-      }
-    }
-
-    /* ── Photo area ──────────────────────────────────────────────────────── */
-
-    .sw-photo-wrap {
-      flex-shrink: 0;
-      overflow: hidden;
-      border-radius: 4px;
-      /* margin set inline: border on all sides except bottom */
-    }
-
-    .sw-photo {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      object-position: center;
-      display: block;
-    }
-
-    /* ── Bottom strip (polaroid footer) ─────────────────────────────────── */
-
-    .sw-footer {
-      flex-shrink: 0;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      /* padding / min-height set inline */
-    }
-
-    /* ── Message (text-only: fills the footer) ───────────────────────────── */
-
-    .sw-message {
-      color: var(--submission-wall-message-color, #2e2317);
-      font-family: var(--submission-wall-message-font,
-        var(--submission-font-family, 'Georgia', 'Times New Roman', serif));
-      font-weight: 700;
-      line-height: 1.22;
-      overflow: hidden;
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: var(--sw-lines, 3);
-      /* font-size set inline */
-    }
-
-    .sw-meta {
-      color: var(--submission-wall-meta-color, #5e4d3a);
-      font-family: var(--submission-wall-meta-font, 'Segoe UI', system-ui, sans-serif);
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      opacity: 0.82;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      margin-top: 3px;
-      /* font-size set inline */
-    }
-
-    /* ── Quote mark ──────────────────────────────────────────────────────── */
-
-    .sw-quote-mark {
-      display: block;
-      color: var(--submission-wall-message-color, #2e2317);
-      font-family: var(--submission-wall-message-font, Georgia, serif);
-      line-height: 0.7;
-      opacity: 0.15;
-      user-select: none;
-      /* font-size set inline */
-    }
-
-    /* ── Empty state ─────────────────────────────────────────────────────── */
-
-    .sw-empty {
-      width: min(62vw, 920px);
-      padding: clamp(18px, 2.2vw, 34px);
-      border-radius: 14px;
-      background: var(--polaroid-card-bg, #fffef8);
-      box-shadow: var(--polaroid-card-shadow,
-        0 20px 48px rgba(0,0,0,0.5), 0 6px 16px rgba(0,0,0,0.3));
-      text-align: center;
-      animation: sw-card-in 540ms cubic-bezier(0.22, 0.9, 0.28, 1) both;
-    }
-
-    .sw-empty-title {
-      color: var(--submission-wall-message-color, #2e2317);
-      font-family: var(--submission-wall-message-font,
-        var(--submission-font-family, 'Georgia', 'Times New Roman', serif));
-      font-size: clamp(34px, 4.2vw, 68px);
-      line-height: 1.06;
-      font-weight: 800;
-      margin-bottom: 8px;
-    }
-
-    .sw-empty-sub {
-      color: var(--submission-wall-meta-color, #5e4d3a);
-      font-family: var(--submission-wall-meta-font, 'Segoe UI', system-ui, sans-serif);
-      font-size: clamp(16px, 1.7vw, 26px);
-      font-weight: 600;
-      line-height: 1.25;
-    }
-
-    /* ── QR bug ──────────────────────────────────────────────────────────── */
-
-    .sw-qr {
-      position: absolute;
-      right: clamp(12px, 1.8vw, 24px);
-      bottom: clamp(12px, 1.8vh, 24px);
-      z-index: 3;
-      background: rgba(8, 12, 18, 0.78);
-      border: 1px solid rgba(255, 255, 255, 0.22);
-      border-radius: 12px;
-      padding: 9px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
-      box-shadow: 0 8px 18px rgba(0,0,0,0.36);
-      animation: sw-card-in 420ms cubic-bezier(0.22, 0.9, 0.28, 1) 160ms both;
-    }
-
-    .sw-qr img {
-      width: min(10.5vw, 112px);
-      border-radius: 5px;
-      background: #fff;
-    }
-
-    .sw-qr-label {
-      color: #fff;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      font-size: clamp(10px, 0.92vw, 13px);
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      opacity: 0.93;
-    }
-  `;
-
-  document.head.appendChild(style);
-}
 
 /* ── Sizing maths ─────────────────────────────────────────────────────── */
 
@@ -346,8 +104,7 @@ function _buildCard(item, sz, delayMs, isHero) {
   const msgText    = String(item.message || '').trim();
   const metaText   = item.submitterValue ? `— ${item.submitterValue}` : '';
 
-  const card = document.createElement('article');
-  card.className = 'sw-card';
+  const card = el('article', { cls: 'sw-card' });
   card.style.setProperty('--sw-rot',    `${(Math.random() * 3.2 - 1.6).toFixed(2)}deg`);
   card.style.setProperty('--sw-delay',  `${delayMs}ms`);
   card.style.setProperty('--sw-card-w', `${sz.cardW}px`);
@@ -355,25 +112,20 @@ function _buildCard(item, sz, delayMs, isHero) {
 
   if (hasPhoto) {
     // Photo area — square, with polaroid border on sides and top
-    const wrap = document.createElement('div');
-    wrap.className = 'sw-photo-wrap';
+    const wrap = el('div', { cls: 'sw-photo-wrap' });
     wrap.style.cssText = [
       `width:${sz.photoSize}px;`,
       `height:${sz.photoSize}px;`,
       `margin:${sz.border}px ${sz.border}px 0 ${sz.border}px;`,
     ].join('');
 
-    const img = document.createElement('img');
-    img.className = 'sw-photo';
-    img.src = item.photoThumbUrl || item.photoUrl;
-    img.alt = '';
+    const img = el('img', { cls: 'sw-photo', src: item.photoThumbUrl || item.photoUrl, alt: '' });
     wrap.appendChild(img);
     card.appendChild(wrap);
   }
 
   // Footer / copy area
-  const footer = document.createElement('div');
-  footer.className = 'sw-footer';
+  const footer = el('div', { cls: 'sw-footer' });
   footer.style.cssText = [
     `min-height:${sz.footerH}px;`,
     `padding:${Math.round(sz.footerH * 0.12)}px ${sz.border}px ${Math.round(sz.footerH * 0.14)}px;`,
@@ -381,17 +133,13 @@ function _buildCard(item, sz, delayMs, isHero) {
 
   if (!hasPhoto && msgText) {
     // Text-only card: decorative quote mark above message
-    const qm = document.createElement('span');
-    qm.className = 'sw-quote-mark';
-    qm.textContent = '\u201C';
+    const qm = el('span', { cls: 'sw-quote-mark', text: '\u201C' });
     qm.style.fontSize = `${sz.quoteSize}px`;
     footer.appendChild(qm);
   }
 
   if (msgText) {
-    const msg = document.createElement('div');
-    msg.className = 'sw-message';
-    msg.textContent = msgText;
+    const msg = el('div', { cls: 'sw-message', text: msgText });
     msg.style.fontSize = `${sz.msgSize}px`;
     // Text-only: allow more lines in the tall footer
     msg.style.setProperty('--sw-lines', hasPhoto ? '2' : '5');
@@ -399,9 +147,7 @@ function _buildCard(item, sz, delayMs, isHero) {
   }
 
   if (metaText) {
-    const meta = document.createElement('div');
-    meta.className = 'sw-meta';
-    meta.textContent = metaText;
+    const meta = el('div', { cls: 'sw-meta', text: metaText });
     meta.style.fontSize = `${sz.metaSize}px`;
     footer.appendChild(meta);
   }
@@ -417,16 +163,14 @@ function _buildPage(items, entering, bottomInset) {
   const sz   = _sizing(n, bottomInset);
   const rows = _rowSizes(n);
 
-  const page = document.createElement('div');
-  page.className = 'sw-page' + (entering ? ' sw-page-enter' : '');
+  const page = el('div', { cls: 'sw-page' + (entering ? ' sw-page-enter' : '') });
   page.style.setProperty('--sw-gap', `${sz.gap}px`);
   page.style.setProperty('--sw-pad', `${sz.pad}px`);
 
   const isHero = n === 1;
   let cursor = 0;
   rows.forEach((rowLen, rowIdx) => {
-    const row = document.createElement('div');
-    row.className = 'sw-row';
+    const row = el('div', { cls: 'sw-row' });
     for (let i = 0; i < rowLen; i++) {
       const delay = (rowIdx * 3 + i) * 70;
       const card  = _buildCard(items[cursor++], sz, delay, isHero);
@@ -445,19 +189,13 @@ function _appendQr(shell, options = {}) {
   const bottomInset = Number(options.bottomInset) || 0;
   const baseBottom  = Math.max(12, Math.round(window.innerHeight * 0.018));
 
-  const qr = document.createElement('div');
-  qr.className = 'sw-qr';
+  const qr = el('div', { cls: 'sw-qr' });
   qr.style.bottom = `${baseBottom + bottomInset}px`;
 
-  const img = document.createElement('img');
-  img.src = options.qrImageUrl;
-  img.alt = '';
+  const img = el('img', { src: options.qrImageUrl, alt: '' });
   qr.appendChild(img);
 
-  const label = document.createElement('div');
-  label.className = 'sw-qr-label';
-  label.textContent = 'submit yours';
-  qr.appendChild(label);
+  qr.appendChild(el('div', { cls: 'sw-qr-label', text: 'submit yours' }));
 
   shell.appendChild(qr);
 }
@@ -503,42 +241,25 @@ function _startPaging(shell, pageChunks, firstPage, bottomInset) {
  * @param {{ showQr?: boolean, qrImageUrl?: string, bottomInset?: number }} options
  */
 export function buildSubmissionWall(items, mode = 'both', options = {}) {
-  _ensureStyle();
-
   const list        = Array.isArray(items) ? items : [];
   const bottomInset = Number(options.bottomInset) || 0;
 
-  const el = document.createElement('div');
-  el.className = 'layout sw-layout';
-  if (bottomInset > 0) el.style.paddingBottom = `${bottomInset}px`;
+  const rootEl = el('div', { cls: 'layout sw-layout' });
+  if (bottomInset > 0) rootEl.style.paddingBottom = `${bottomInset}px`;
 
-  const shell = document.createElement('div');
-  shell.className = 'sw-shell';
-  shell.style.cssText = 'position:relative;width:100%;height:100%;';
-  el.appendChild(shell);
+  const shell = el('div', { cls: 'sw-shell' });
+  rootEl.appendChild(shell);
 
   // Empty state
   if (!list.length) {
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:1;';
-
-    const empty = document.createElement('div');
-    empty.className = 'sw-empty';
-
-    const title = document.createElement('div');
-    title.className = 'sw-empty-title';
-    title.textContent = 'Share your photos';
-    empty.appendChild(title);
-
-    const sub = document.createElement('div');
-    sub.className = 'sw-empty-sub';
-    sub.textContent = 'Your approved submissions will appear here';
-    empty.appendChild(sub);
-
-    wrap.appendChild(empty);
-    shell.appendChild(wrap);
+    shell.appendChild(el('div', { cls: 'sw-empty-wrap' },
+      el('div', { cls: 'sw-empty' },
+        el('div', { cls: 'sw-empty-title', text: 'Share your photos' }),
+        el('div', { cls: 'sw-empty-sub',   text: 'Your approved submissions will appear here' }),
+      ),
+    ));
     _appendQr(shell, options);
-    return { el, visibleIds: [], startMotion: () => {} };
+    return { el: rootEl, visibleIds: [], startMotion: () => {} };
   }
 
   // Effective mode
@@ -552,7 +273,7 @@ export function buildSubmissionWall(items, mode = 'both', options = {}) {
     shell.appendChild(page);
     _appendQr(shell, options);
     return {
-      el,
+      el: rootEl,
       visibleIds: [`submission:${list[0].id}`],
       startMotion: () => {},
     };
@@ -571,7 +292,7 @@ export function buildSubmissionWall(items, mode = 'both', options = {}) {
   let _stopPaging = () => {};
 
   return {
-    el,
+    el: rootEl,
     visibleIds: list.map(i => `submission:${i.id}`),
     startMotion() {
       _stopPaging = _startPaging(shell, pageChunks, firstPage, bottomInset);

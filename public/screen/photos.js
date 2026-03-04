@@ -1,5 +1,6 @@
 // Photo pool management: recency-weighted selection, hero picking, slot assignment
 
+import { lerp, shuffle }  from '../../shared/utils.js';
 import { clearPreloaded, isPreloaded } from './preload.js';
 
 /** @type {Map<string, Object>} All known photos keyed by id */
@@ -191,8 +192,6 @@ function photoWeight(photo, recencyMap, now) {
   return recencyMult * fairnessMult * recentMult * heroBump * preloadMult;
 }
 
-function lerp(a, b, t) { return a + (b - a) * t; }
-
 function _aspectRatio(photo) {
   const w = photo.displayWidth || photo.width || 1;
   const h = photo.displayHeight || photo.height || 1;
@@ -316,15 +315,6 @@ function weightedRandom(candidates) {
     if (r <= 0) return photo;
   }
   return candidates[candidates.length - 1]?.photo || null;
-}
-
-function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
 }
 
 // ---------------------------------------------------------------------------

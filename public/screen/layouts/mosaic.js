@@ -53,17 +53,8 @@ export function buildMosaic(templateName, heroPhoto, otherPhotos, minTilePx, cfg
 
   const el = document.createElement('div');
   el.className = 'layout layout-mosaic';
-  el.style.cssText = [
-    'position:absolute;inset:0;',
-    'padding-top:var(--screen-padding-top,var(--screen-padding,0px));',
-    'padding-right:var(--screen-padding-right,var(--screen-padding,0px));',
-    'padding-bottom:var(--screen-padding-bottom,var(--screen-padding,0px));',
-    'padding-left:var(--screen-padding-left,var(--screen-padding,0px));',
-    `display:grid;`,
-    `grid-template-columns:repeat(${tpl.cols},1fr);`,
-    `grid-template-rows:repeat(${tpl.rows},1fr);`,
-    'gap:var(--tile-gap,2px);background:var(--screen-bg,#111);',
-  ].join('');
+  el.style.gridTemplateColumns = `repeat(${tpl.cols},1fr)`;
+  el.style.gridTemplateRows    = `repeat(${tpl.rows},1fr)`;
 
   // Separate slots by type: hero, recent, normal
   const normalSlots = tpl.slots.filter(s => !s.hero && !s.recent);
@@ -98,7 +89,8 @@ export function buildMosaic(templateName, heroPhoto, otherPhotos, minTilePx, cfg
 
   tpl.slots.forEach((slotDef) => {
     const slot = document.createElement('div');
-    slot.style.cssText = `grid-area:${slotDef.area};overflow:hidden;position:relative;border-radius:var(--tile-radius,0px);box-shadow:var(--tile-shadow,none);border:var(--tile-border,none);`;
+    slot.className = 'mosaic-slot';
+    slot.style.gridArea = slotDef.area;
 
     let photo;
     if (slotDef.hero)   photo = heroPhoto;
@@ -110,7 +102,6 @@ export function buildMosaic(templateName, heroPhoto, otherPhotos, minTilePx, cfg
       const preferThumb = _shouldPreferThumb(slotDef, tpl);
       img.src   = _photoUrlForSlot(photo, slotDef, tpl);
       img.alt   = photo.name;
-      img.style.cssText = 'width:100%;height:100%;display:block;object-fit:cover;';
       applySmartFit(img, photo, Boolean(slotDef.portrait));
       slot.appendChild(img);
       slot.dataset.photoId  = photo.id;
@@ -121,7 +112,7 @@ export function buildMosaic(templateName, heroPhoto, otherPhotos, minTilePx, cfg
       visibleIds.push(photo.id);
       if (slotDef.hero) heroImg = img;
     } else {
-      slot.style.background = '#1a1a1a';
+      slot.classList.add('mosaic-slot-empty');
     }
 
     el.appendChild(slot);

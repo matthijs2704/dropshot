@@ -49,14 +49,16 @@
   --ticker-inset-x:        0px;
 
   /* ── Info bar ─────────────────────────────────────────────────────────── */
-  --infobar-bg:               rgba(26, 18, 8, 0.92);
-  --infobar-color:            #f0ddb8;
-  --infobar-height:           40px;
-  --infobar-border-top:       1px solid rgba(240, 221, 184, 0.15);
-  --infobar-clock-color:      rgba(240, 221, 184, 0.6);
-  --infobar-event-color:      #f0ddb8;
-  --infobar-countdown-color:  #ffdca8;
-  --infobar-divider-color:    rgba(240, 221, 184, 0.2);
+  --infobar-bg:                   rgba(10, 7, 3, 0.93);
+  --infobar-color:                #f0ddb8;
+  --infobar-height:               60px;
+  --infobar-border-top:           none;  /* replaced by #infobar-gold-border element */
+  --infobar-clock-color:          rgba(240, 221, 184, 0.85);
+  --infobar-event-color:          #f0ddb8;
+  --infobar-countdown-color:      #ffdca8;
+  --infobar-divider-color:        rgba(200, 150, 50, 0.35);
+  /* Push ticker text clear of the bottom-right logo (logo is ~22vw wide) */
+  --infobar-ticker-padding:       0 23vw 0 0;
 
   /* ── Corner bug ───────────────────────────────────────────────────────── */
   --bug-bg:          rgba(26, 18, 8, 0.82);

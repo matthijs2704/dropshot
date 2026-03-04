@@ -71,3 +71,16 @@
     opacity: 1;
     transform: translateY(0);
   }
+
+  /* Theme frame overlay (injected by theme.js) */
+  #theme-frame {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* Hoisted theme elements appended directly to body */
+  [data-theme-hoist] {
+    pointer-events: none;
+  }

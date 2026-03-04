@@ -8,6 +8,9 @@
 //
 // Themeable via CSS custom properties; all have sensible fallbacks.
 
+import { fmtDuration }                     from '../../../shared/utils.js';
+import { startTickerScroll, startTickerFade } from './_overlay-utils.js';
+
 let _barEl        = null;
 let _clockEl      = null;
 let _eventEl      = null;
@@ -28,152 +31,14 @@ let _countdownTimer  = null;
 
 // Last-rendered event slot state — used to detect meaningful changes for fade transition
 let _eventSlotLast = { name: null, timeVisible: null, visible: null, kind: null, name2: null, visible2: null };
-let _tickerFrame     = null;
 
 let _cfg      = {};
 let _schedule = [];   // sorted upcoming events from server
 let _alert    = null; // active bottom-bar countdown alert (overrides schedule)
-let _tickerPos   = 0;
-let _tickerSpeed = 60;
-let _tickerLast  = null;
-// Fade-mode ticker state
+// Ticker animation config (read at _startTicker time)
 let _tickerMessages = [];
-let _tickerMsgIndex = 0;
 let _tickerDwellMs  = 5000;
-let _tickerFadeTimer = null;
-
-// ---------------------------------------------------------------------------
-// Style injection
-// ---------------------------------------------------------------------------
-
-let _styleInjected = false;
-
-function _ensureStyle() {
-  if (_styleInjected) return;
-  _styleInjected = true;
-
-  const style = document.createElement('style');
-  style.id = 'overlay-infobar-style';
-  style.textContent = `
-    #overlay-infobar {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: var(--infobar-height, 40px);
-      background: var(--infobar-bg, rgba(0, 0, 0, 0.82));
-      border-top: var(--infobar-border-top, 1px solid rgba(255, 255, 255, 0.1));
-      color: var(--infobar-color, #ffffff);
-      font-family: var(--infobar-font-family, var(--ticker-font-family, 'Segoe UI', system-ui, sans-serif));
-      font-size: var(--infobar-font-size, 15px);
-      font-weight: 600;
-      letter-spacing: var(--infobar-letter-spacing, 0.03em);
-      z-index: 9100;
-      display: flex;
-      align-items: center;
-      overflow: hidden;
-      pointer-events: none;
-    }
-
-    /* ── Clock slot ─────────────────────────────────────────────────────── */
-
-    #overlay-infobar-clock {
-      flex-shrink: 0;
-      padding: 0 14px;
-      color: var(--infobar-clock-color, rgba(255, 255, 255, 0.7));
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
-    }
-
-    /* ── Divider between slots ──────────────────────────────────────────── */
-
-    .infobar-divider {
-      flex-shrink: 0;
-      width: 1px;
-      height: 55%;
-      background: var(--infobar-divider-color, rgba(255, 255, 255, 0.18));
-    }
-
-    /* ── Event slot ─────────────────────────────────────────────────────── */
-
-    #overlay-infobar-event,
-    #overlay-infobar-event2 {
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 0 16px;
-      max-width: 55%;
-      overflow: hidden;
-      white-space: nowrap;
-      transition: opacity 0.35s ease;
-    }
-
-    #overlay-infobar-event-label,
-    #overlay-infobar-event2-label {
-      flex-shrink: 0;
-      font-weight: 400;
-      color: var(--infobar-event-label-color, rgba(255, 255, 255, 0.45));
-    }
-
-    #overlay-infobar-event-name,
-    #overlay-infobar-event2-name {
-      flex-shrink: 1;
-      font-weight: 700;
-      color: var(--infobar-event-color, #ffffff);
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    #overlay-infobar-event-loc,
-    #overlay-infobar-event2-loc {
-      flex-shrink: 1;
-      font-weight: 400;
-      color: var(--infobar-event-loc-color, rgba(255, 255, 255, 0.5));
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    #overlay-infobar-event-time,
-    #overlay-infobar-event2-time {
-      flex-shrink: 0;
-      font-variant-numeric: tabular-nums;
-      color: var(--infobar-countdown-color, #ffdca8);
-      font-weight: 700;
-      font-size: var(--infobar-countdown-size, 1em);
-    }
-
-    /* ── Ticker slot ────────────────────────────────────────────────────── */
-
-    #overlay-infobar-ticker {
-      flex: 1;
-      min-width: 0;
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-    }
-
-    #overlay-infobar-ticker-inner {
-      white-space: nowrap;
-      will-change: transform;
-      color: var(--infobar-ticker-color, var(--ticker-color, #ffffff));
-      font-size: var(--infobar-ticker-font-size, var(--ticker-font-size, 15px));
-      font-weight: var(--infobar-ticker-font-weight, var(--ticker-font-weight, 600));
-      letter-spacing: var(--infobar-ticker-letter-spacing, var(--ticker-letter-spacing, 0.03em));
-      transition: opacity 0.5s ease;
-    }
-
-    /* Entry animation */
-    #overlay-infobar {
-      animation: infobar-in 300ms ease forwards;
-    }
-    @keyframes infobar-in {
-      from { opacity: 0; transform: translateY(6px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-  `;
-  document.head.appendChild(style);
-}
+let _stopTickerAnim = () => {};
 
 // ---------------------------------------------------------------------------
 // Clock
@@ -205,16 +70,6 @@ function _stopClock() {
 // ---------------------------------------------------------------------------
 // Event / countdown slot
 // ---------------------------------------------------------------------------
-
-function _formatDuration(ms) {
-  const totalSec = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  const pad = n => String(n).padStart(2, '0');
-  if (h > 0) return `${pad(h)}:${pad(m)}:${pad(s)}`;
-  return `${pad(m)}:${pad(s)}`;
-}
 
 // Resolve what to show in the event slot(s).
 // Returns { primary, secondary } where secondary is only set when there is no ticker
@@ -330,7 +185,7 @@ function _applySlotToEl(slot, containerEl, labelEl, nameEl, locEl, timeEl) {
   }
   if (timeEl) {
     if (slot.remaining !== null && Number.isFinite(slot.remaining) && slot.remaining > 0) {
-      timeEl.textContent = _formatDuration(slot.remaining);
+      timeEl.textContent = fmtDuration(slot.remaining);
       timeEl.style.display = '';
     } else {
       timeEl.style.display = 'none';
@@ -365,7 +220,7 @@ function _refreshEventSlot() {
   if (!primaryChanged) {
     // Only the countdown number ticked — update in place without fading
     if (primary && _eventTimeEl && newTimeVisible) {
-      _eventTimeEl.textContent = _formatDuration(primary.remaining);
+      _eventTimeEl.textContent = fmtDuration(primary.remaining);
     }
   } else {
     _eventSlotLast = { ...(_eventSlotLast), name: newName, timeVisible: newTimeVisible, visible: newVisible, kind: newKind };
@@ -396,7 +251,7 @@ function _refreshEventSlot() {
       if (secondary && _event2TimeEl) {
         const rem2 = secondary.remaining;
         if (rem2 !== null && Number.isFinite(rem2) && rem2 > 0) {
-          _event2TimeEl.textContent = _formatDuration(rem2);
+          _event2TimeEl.textContent = fmtDuration(rem2);
         }
       }
     } else {
@@ -441,77 +296,20 @@ function _stopCountdownTimer() {
 // Ticker animation
 // ---------------------------------------------------------------------------
 
-function _startTickerScroll() {
-  if (!_tickerInner) return;
-  _tickerPos  = 0;
-  _tickerLast = null;
-
-  function step(ts) {
-    if (_tickerLast !== null) {
-      const dt = (ts - _tickerLast) / 1000;
-      _tickerPos += _tickerSpeed * dt;
-      if (_tickerPos > _tickerInner.scrollWidth) _tickerPos = -window.innerWidth;
-      _tickerInner.style.transform = `translateX(${-_tickerPos}px)`;
-    }
-    _tickerLast  = ts;
-    _tickerFrame = requestAnimationFrame(step);
-  }
-
-  if (_tickerFrame) cancelAnimationFrame(_tickerFrame);
-  _tickerFrame = requestAnimationFrame(step);
-}
-
-// Map tickerAlign → padding string for inner element in fade mode
-function _tickerFadePadding(align) {
-  if (align === 'center') return '0 16px';
-  if (align === 'end')    return '0 16px 0 0';
-  return '0 0 0 16px'; // start
-}
-
-function _startTickerFade() {
-  if (!_tickerInner || !_tickerMessages.length) return;
-
-  const align   = _cfg.tickerAlign || 'start';
-  const padding = _tickerFadePadding(align);
-
-  _tickerInner.style.transform = 'none';
-  _tickerInner.style.padding   = padding;
-
-  function showNext() {
-    if (!_tickerInner) return;
-    _tickerInner.style.opacity = '0';
-    setTimeout(() => {
-      if (!_tickerInner) return;
-      _tickerInner.textContent = _tickerMessages[_tickerMsgIndex % _tickerMessages.length];
-      _tickerInner.style.padding   = padding;
-      _tickerInner.style.opacity   = '1';
-      _tickerMsgIndex++;
-      _tickerFadeTimer = setTimeout(showNext, _tickerDwellMs);
-    }, 500);
-  }
-
-  _tickerInner.textContent   = _tickerMessages[0] || '';
-  _tickerInner.style.opacity = '1';
-  _tickerMsgIndex = 1;
-
-  if (_tickerMessages.length > 1) {
-    _tickerFadeTimer = setTimeout(showNext, _tickerDwellMs);
-  }
-}
-
 function _startTicker() {
   if (!_tickerInner) return;
-  const mode = _cfg.tickerMode || 'scroll';
+  const mode    = _cfg.tickerMode  || 'scroll';
+  const align   = _cfg.tickerAlign || 'start';
   if (mode === 'fade') {
-    _startTickerFade();
+    _stopTickerAnim = startTickerFade(_tickerInner, _tickerMessages, _tickerDwellMs, align);
   } else {
-    _startTickerScroll();
+    _stopTickerAnim = startTickerScroll(_tickerInner, _cfg.tickerSpeed || 60);
   }
 }
 
 function _stopTicker() {
-  if (_tickerFrame) { cancelAnimationFrame(_tickerFrame); _tickerFrame = null; }
-  if (_tickerFadeTimer) { clearTimeout(_tickerFadeTimer); _tickerFadeTimer = null; }
+  _stopTickerAnim();
+  _stopTickerAnim = () => {};
 }
 
 // ---------------------------------------------------------------------------
@@ -539,12 +337,43 @@ function _updateDividers() {
 }
 
 // ---------------------------------------------------------------------------
+// DOM build helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Build one event slot div + its four child spans.
+ * @param {string} suffix  '' for the primary slot, '2' for the secondary
+ * @returns {{ slotEl, labelEl, nameEl, locEl, timeEl }}
+ */
+function _makeEventSlot(suffix) {
+  const slotEl  = document.createElement('div');
+  slotEl.id = `overlay-infobar-event${suffix}`;
+  slotEl.style.display = 'none';
+
+  const labelEl = document.createElement('span');
+  labelEl.id = `overlay-infobar-event${suffix}-label`;
+  slotEl.appendChild(labelEl);
+
+  const nameEl = document.createElement('span');
+  nameEl.id = `overlay-infobar-event${suffix}-name`;
+  slotEl.appendChild(nameEl);
+
+  const locEl = document.createElement('span');
+  locEl.id = `overlay-infobar-event${suffix}-loc`;
+  slotEl.appendChild(locEl);
+
+  const timeEl = document.createElement('span');
+  timeEl.id = `overlay-infobar-event${suffix}-time`;
+  slotEl.appendChild(timeEl);
+
+  return { slotEl, labelEl, nameEl, locEl, timeEl };
+}
+
+// ---------------------------------------------------------------------------
 // DOM build
 // ---------------------------------------------------------------------------
 
 function _buildBar(cfg) {
-  _ensureStyle();
-
   const bar = document.createElement('div');
   bar.id = 'overlay-infobar';
 
@@ -561,49 +390,13 @@ function _buildBar(cfg) {
   // Event slot — shown when at least one of the two event flags is on
   const showAnyEvent = cfg.infoBarShowCurrentEvent !== false || cfg.infoBarShowNextEvent !== false;
   if (showAnyEvent) {
-    _eventEl = document.createElement('div');
-    _eventEl.id = 'overlay-infobar-event';
-    _eventEl.style.display = 'none'; // hidden until there's something to show
-
-    _eventLabelEl = document.createElement('span');
-    _eventLabelEl.id = 'overlay-infobar-event-label';
-    _eventEl.appendChild(_eventLabelEl);
-
-    _eventNameEl = document.createElement('span');
-    _eventNameEl.id = 'overlay-infobar-event-name';
-    _eventEl.appendChild(_eventNameEl);
-
-    _eventLocEl = document.createElement('span');
-    _eventLocEl.id = 'overlay-infobar-event-loc';
-    _eventEl.appendChild(_eventLocEl);
-
-    _eventTimeEl = document.createElement('span');
-    _eventTimeEl.id = 'overlay-infobar-event-time';
-    _eventEl.appendChild(_eventTimeEl);
-
+    ({ slotEl: _eventEl, labelEl: _eventLabelEl, nameEl: _eventNameEl,
+       locEl: _eventLocEl, timeEl: _eventTimeEl } = _makeEventSlot(''));
     bar.appendChild(_eventEl);
 
     // Second event slot — only visible when secondary event is resolved (no ticker + both current & next)
-    _event2El = document.createElement('div');
-    _event2El.id = 'overlay-infobar-event2';
-    _event2El.style.display = 'none';
-
-    _event2LabelEl = document.createElement('span');
-    _event2LabelEl.id = 'overlay-infobar-event2-label';
-    _event2El.appendChild(_event2LabelEl);
-
-    _event2NameEl = document.createElement('span');
-    _event2NameEl.id = 'overlay-infobar-event2-name';
-    _event2El.appendChild(_event2NameEl);
-
-    _event2LocEl = document.createElement('span');
-    _event2LocEl.id = 'overlay-infobar-event2-loc';
-    _event2El.appendChild(_event2LocEl);
-
-    _event2TimeEl = document.createElement('span');
-    _event2TimeEl.id = 'overlay-infobar-event2-time';
-    _event2El.appendChild(_event2TimeEl);
-
+    ({ slotEl: _event2El, labelEl: _event2LabelEl, nameEl: _event2NameEl,
+       locEl: _event2LocEl, timeEl: _event2TimeEl } = _makeEventSlot('2'));
     bar.appendChild(_event2El);
   } else {
     _eventEl = null;
@@ -667,15 +460,37 @@ export function mountInfoBar(cfg, schedule) {
 
   _cfg      = cfg || {};
   _schedule = Array.isArray(schedule) ? schedule : [];
-  _tickerSpeed = Number(_cfg.tickerSpeed) || 60;
 
   // Prepare fade-mode state
   _tickerMessages = Array.isArray(_cfg.tickerMessages) ? _cfg.tickerMessages.filter(m => m && m.trim()) : [];
-  _tickerMsgIndex = 0;
   _tickerDwellMs  = Math.max(500, (Number(_cfg.tickerFadeDwellSec) || 5) * 1000);
 
   _barEl = _buildBar(_cfg);
+  if (_cfg.infoBarFontSize) {
+    const fs = _cfg.infoBarFontSize;
+    _barEl.style.setProperty('--infobar-font-size', `${fs}px`);
+    // Scale height proportionally when the user picks a non-default font size.
+    // When fs == 15 (default) we leave --infobar-height alone so the theme CSS
+    // variable (e.g. camp's 60px) is not clobbered by the JS override.
+    if (fs !== 15) {
+      const defaultHeight = 40;
+      const defaultFs     = 15;
+      const scaledHeight  = Math.round((fs / defaultFs) * defaultHeight);
+      _barEl.style.setProperty('--infobar-height', `${scaledHeight}px`);
+      // Also set on :root so hoisted theme elements (e.g. camp gold border) track it
+      document.documentElement.style.setProperty('--infobar-height', `${scaledHeight}px`);
+    }
+  }
   document.body.appendChild(_barEl);
+
+  // After mount, read the actual rendered height and publish it on :root so that
+  // hoisted theme elements (e.g. the camp gold border) can position themselves
+  // relative to the bar using var(--infobar-height).
+  requestAnimationFrame(() => {
+    if (!_barEl) return;
+    const h = _barEl.offsetHeight;
+    if (h > 0) document.documentElement.style.setProperty('--infobar-height', `${h}px`);
+  });
 
   _eventSlotLast = { name: null, timeVisible: null, visible: null, kind: null, name2: null, visible2: null };
 
@@ -698,12 +513,12 @@ export function removeInfoBar() {
   _stopCountdownTimer();
   _stopTicker();
   if (_barEl) { _barEl.remove(); _barEl = null; }
+  document.documentElement.style.removeProperty('--infobar-height');
   _clockEl = _eventEl = _eventLabelEl = _eventNameEl = _eventLocEl = _eventTimeEl = null;
   _event2El = _event2LabelEl = _event2NameEl = _event2LocEl = _event2TimeEl = null;
   _tickerEl = _tickerInner = null;
   _alert = null;
   _tickerMessages = [];
-  _tickerMsgIndex = 0;
   _eventSlotLast = { name: null, timeVisible: null, visible: null, kind: null, name2: null, visible2: null };
 }
 

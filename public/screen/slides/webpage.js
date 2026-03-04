@@ -6,10 +6,9 @@
  */
 export function buildWebpageSlide(slide) {
   const wrap = document.createElement('div');
-  wrap.style.cssText = 'position:absolute;inset:0;background:#000;';
+  wrap.className = 'slide-webpage';
 
   const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
   iframe.sandbox = 'allow-scripts allow-same-origin allow-forms';
   iframe.src     = slide.src || 'about:blank';
 

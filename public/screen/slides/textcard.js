@@ -12,43 +12,20 @@
  *   minimal       — near-black, left-aligned, subtle accent dot
  */
 
-const PRESETS = {
-  'dark-center': {
-    bg:         'var(--textcard-bg, #09090f)',
-    color:      'var(--textcard-color, #f0f0f8)',
-    align:      'center',
-    justify:    'center',
-    accent:     'var(--textcard-accent, #6c63ff)',
-    accentBar:  'top',          // 'top' | 'left' | 'none'
-    pad:        '8vw 10vw',
-  },
-  'light-left': {
-    bg:         'var(--textcard-bg, #f7f6f2)',
-    color:      'var(--textcard-color, #111117)',
-    align:      'left',
-    justify:    'center',
-    accent:     'var(--textcard-accent, #4f46e5)',
-    accentBar:  'left',
-    pad:        '8vw 9vw 8vw 11vw',
-  },
-  gradient: {
-    bg:         'var(--textcard-bg, linear-gradient(145deg,#0f0c29 0%,#1a1a4e 50%,#0d2b55 100%))',
-    color:      'var(--textcard-color, #fff)',
-    align:      'center',
-    justify:    'center',
-    accent:     'var(--textcard-accent, #a78bfa)',
-    accentBar:  'top',
-    pad:        '8vw 10vw',
-  },
-  minimal: {
-    bg:         'var(--textcard-bg, #141418)',
-    color:      'var(--textcard-color, #d8d8e8)',
-    align:      'left',
-    justify:    'flex-end',     // text anchored toward bottom-left
-    accent:     'var(--textcard-accent, #4ade80)',
-    accentBar:  'none',
-    pad:        '6vw 8vw',
-  },
+import { el } from '../../shared/utils.js';
+
+const PRESET_CLASS = {
+  'dark-center': 'tc-dark-center',
+  'light-left':  'tc-light-left',
+  gradient:      'tc-gradient',
+  minimal:       'tc-minimal',
+};
+
+const PRESET_ACCENT_BAR = {
+  'dark-center': 'top',
+  'light-left':  'left',
+  gradient:      'top',
+  minimal:       'none',
 };
 
 /**
@@ -56,105 +33,27 @@ const PRESETS = {
  * @returns {{ el: HTMLElement, play: () => Promise<void> }}
  */
 export function buildTextCardSlide(slide) {
-  const preset = PRESETS[slide.template] || PRESETS['dark-center'];
-  const bgVal  = slide.bgColor || preset.bg;
+  const templateKey  = slide.template || 'dark-center';
+  const presetClass  = PRESET_CLASS[templateKey]  || PRESET_CLASS['dark-center'];
+  const accentBar    = PRESET_ACCENT_BAR[templateKey] ?? 'top';
 
   // ── Root wrapper ──────────────────────────────────────────────────────────
-  const wrap = document.createElement('div');
-  wrap.style.cssText = [
-    'position:absolute;inset:0;',
-    `background:${bgVal};`,
-    'display:flex;',
-    `align-items:${preset.justify};`,
-    `justify-content:${preset.align === 'center' ? 'center' : 'flex-start'};`,
-    `padding:${preset.pad};`,
-    'overflow:hidden;',
-  ].join('');
+  const wrap = el('div', { cls: `slide-textcard ${presetClass}` });
+  if (slide.bgColor) wrap.style.background = slide.bgColor;
 
   // ── Accent bar (top or left) ───────────────────────────────────────────────
-  if (preset.accentBar === 'top') {
-    const bar = document.createElement('div');
-    bar.style.cssText = [
-      'position:absolute;top:0;left:0;right:0;',
-      'height:0.5vh;min-height:3px;',
-      `background:${preset.accent};`,
-      'opacity:0.9;',
-    ].join('');
-    wrap.appendChild(bar);
-  }
-
-  if (preset.accentBar === 'left') {
-    const bar = document.createElement('div');
-    bar.style.cssText = [
-      'position:absolute;top:0;bottom:0;left:0;',
-      'width:0.55vw;min-width:4px;',
-      `background:${preset.accent};`,
-    ].join('');
-    wrap.appendChild(bar);
-  }
+  if (accentBar === 'top')  wrap.appendChild(el('div', { cls: 'tc-accent-top' }));
+  if (accentBar === 'left') wrap.appendChild(el('div', { cls: 'tc-accent-left' }));
 
   // ── Content block ─────────────────────────────────────────────────────────
-  const inner = document.createElement('div');
-  inner.style.cssText = [
-    'position:relative;',
-    'max-width:75%;',
-    `text-align:${preset.align};`,
-    `color:${preset.color};`,
-    `font-family:var(--textcard-font, 'Segoe UI', system-ui, sans-serif);`,
-  ].join('');
+  const inner = el('div', { cls: 'tc-inner' });
 
   // Minimal preset: small accent dot above title
-  if (preset.accentBar === 'none' && slide.title) {
-    const dot = document.createElement('div');
-    dot.style.cssText = [
-      `width:0.6vw;height:0.6vw;min-width:6px;min-height:6px;`,
-      'border-radius:50%;',
-      `background:${preset.accent};`,
-      'margin-bottom:1.6vh;',
-    ].join('');
-    inner.appendChild(dot);
-  }
+  if (accentBar === 'none' && slide.title) inner.appendChild(el('div', { cls: 'tc-dot' }));
 
-  // Title
-  if (slide.title) {
-    const h = document.createElement('div');
-    h.style.cssText = [
-      'font-size:var(--textcard-title-size, clamp(22px,3.4vw,62px));',
-      'font-weight:800;',
-      'line-height:1.1;',
-      'letter-spacing:-0.02em;',
-      'margin-bottom:0.6em;',
-    ].join('');
-    h.textContent = slide.title;
-    inner.appendChild(h);
-  }
-
-  // Divider between title and body
-  if (slide.title && slide.body) {
-    const rule = document.createElement('div');
-    rule.style.cssText = [
-      preset.align === 'center' ? 'width:3.5vw;margin:0 auto 1em;' : 'width:3.5vw;margin:0 0 1em;',
-      'height:2px;min-width:32px;',
-      `background:${preset.accent};`,
-      'opacity:0.7;',
-      'border-radius:2px;',
-    ].join('');
-    inner.appendChild(rule);
-  }
-
-  // Body
-  if (slide.body) {
-    const p = document.createElement('div');
-    p.style.cssText = [
-      'font-size:var(--textcard-body-size, clamp(13px,1.65vw,30px));',
-      'font-weight:400;',
-      'line-height:1.65;',
-      'opacity:0.82;',
-      'white-space:pre-wrap;',
-    ].join('');
-    p.textContent = slide.body;
-    inner.appendChild(p);
-  }
+  if (slide.title)             inner.appendChild(el('div', { cls: 'tc-title', text: slide.title }));
+  if (slide.title && slide.body) inner.appendChild(el('div', { cls: 'tc-rule' }));
+  if (slide.body)              inner.appendChild(el('div', { cls: 'tc-body',  text: slide.body }));
 
   wrap.appendChild(inner);
 

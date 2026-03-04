@@ -8,10 +8,9 @@
  */
 export function buildVideoSlide(slide) {
   const wrap = document.createElement('div');
-  wrap.style.cssText = 'position:absolute;inset:0;background:#000;display:flex;align-items:center;justify-content:center;';
+  wrap.className = 'slide-video';
 
   const video = document.createElement('video');
-  video.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;';
   video.src     = `/slide-assets/videos/${encodeURIComponent(slide.filename)}`;
   video.muted   = slide.muted !== false;
   video.preload = 'auto';

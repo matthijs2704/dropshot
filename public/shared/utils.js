@@ -122,6 +122,24 @@ export function fmtDuration(ms) {
 }
 
 /**
+ * Return the best display URL for a photo object.
+ * @param {{ displayUrl?: string, url?: string }} photo
+ * @returns {string}
+ */
+export function photoUrl(photo) {
+  return photo.displayUrl || photo.url || '';
+}
+
+/**
+ * Return the best thumbnail URL for a photo object (thumb preferred, falls back to display).
+ * @param {{ thumbUrl?: string, displayUrl?: string, url?: string }} photo
+ * @returns {string}
+ */
+export function photoThumbUrl(photo) {
+  return photo.thumbUrl || photo.displayUrl || photo.url || '';
+}
+
+/**
  * Return the sorted list of active screen IDs for a config object.
  * @param {{ screenCount?: number, screens?: object }} cfg
  * @returns {string[]}

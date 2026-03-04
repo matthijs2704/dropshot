@@ -4,7 +4,7 @@ import { TEMPLATE_DEFS } from '../templates.js';
 import { applySmartFit }  from '../fit.js';
 import { crossFadeSlot, startKenBurns }  from '../transitions.js';
 import { pickPhotos, pickNewestPhotos, arrangePhotosForSlots } from '../photos.js';
-import { shuffle } from '../../shared/utils.js';
+import { shuffle, photoUrl, photoThumbUrl } from '../../shared/utils.js';
 
 function _parseGridArea(area) {
   const parts = String(area || '').split('/').map(s => Number(s.trim()));
@@ -34,9 +34,7 @@ function _shouldPreferThumb(slotDef, tpl) {
 function _photoUrlForSlot(photo, slotDef, tpl) {
   if (!photo) return '';
   const preferThumb = _shouldPreferThumb(slotDef, tpl);
-  return preferThumb
-    ? (photo.thumbUrl || photo.displayUrl || photo.url)
-    : (photo.displayUrl || photo.url);
+  return preferThumb ? photoThumbUrl(photo) : photoUrl(photo);
 }
 
 /**

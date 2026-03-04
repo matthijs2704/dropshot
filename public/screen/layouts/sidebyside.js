@@ -2,6 +2,7 @@
 
 import { applySmartFit }  from '../fit.js';
 import { startKenBurns }  from '../transitions.js';
+import { photoUrl }       from '../../shared/utils.js';
 
 /**
  * Build a side-by-side layout element.
@@ -23,7 +24,7 @@ export function buildSideBySide(photos) {
 
     if (photo) {
       const img = document.createElement('img');
-      img.src   = photo.displayUrl || photo.url;
+      img.src   = photoUrl(photo);
       img.alt   = photo.name;
       applySmartFit(img, photo, true); // each half-slot is portrait (≈0.89 ratio)
       slot.appendChild(img);

@@ -1,4 +1,4 @@
-import { el } from '../../shared/utils.js';
+import { el, photoThumbUrl } from '../../shared/utils.js';
 
 // Polaroid layout: photos displayed as slightly rotated "polaroid" cards
 // on a dark background. Cards are scattered across the whole screen including
@@ -128,7 +128,7 @@ export function buildPolaroid(photos) {
       `margin:${BORDER_VH}vh ${BORDER_VH}vh 0 ${BORDER_VH}vh;`,
     ].join('');
 
-    const img = el('img', { src: photo.thumbUrl || photo.displayUrl || photo.url, alt: photo.name || '' });
+    const img = el('img', { src: photoThumbUrl(photo), alt: photo.name || '' });
     photoWrap.appendChild(img);
 
     // Thick white bottom strip — the polaroid signature

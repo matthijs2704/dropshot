@@ -1,6 +1,8 @@
 // Image preloading queue with bounded concurrency.
 // Keeps the display loop smooth on high-latency connections.
 
+import { photoUrl } from '../shared/utils.js';
+
 const MAX_CONCURRENT = 4;
 
 const _queue = [];
@@ -43,7 +45,7 @@ function _drain() {
 export function preloadPhoto(photo) {
   if (!photo?.id) return;
 
-  const displayUrl = photo.displayUrl || photo.url || '';
+  const displayUrl = photoUrl(photo);
   const thumbUrl = photo.thumbUrl || '';
 
   if (displayUrl) {

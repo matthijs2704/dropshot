@@ -15,7 +15,7 @@
  * All colours/fonts honour CSS custom property overrides (theme system).
  */
 
-import { el } from '../../shared/utils.js';
+import { el, photoUrl } from '../../shared/utils.js';
 
 // ---------------------------------------------------------------------------
 // Layout builders
@@ -91,8 +91,8 @@ export async function buildArticleSlide(slide) {
       const res   = await fetch('/api/photos?status=ready&limit=1&random=1');
       const data  = await res.json();
       const photo = Array.isArray(data) ? data[0] : (data.photos?.[0]);
-      if (photo?.displayUrl || photo?.url) {
-        img.src = photo.displayUrl || photo.url;
+      if (photo && photoUrl(photo)) {
+        img.src = photoUrl(photo);
       }
     } catch { /* img stays blank — graceful degradation */ }
   } else {

@@ -3,6 +3,7 @@
 const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 import { applySmartFit } from './fit.js';
+import { photoUrl, photoThumbUrl } from '../shared/utils.js';
 
 /**
  * Transition between outgoing and incoming layout containers.
@@ -100,9 +101,7 @@ export function crossFadeSlot(slot, photo, durationMs) {
   const preferThumb = slot.dataset.preferThumb === '1';
 
   const next = new Image();
-  next.src   = preferThumb
-    ? (photo.thumbUrl || photo.displayUrl || photo.url)
-    : (photo.displayUrl || photo.url);
+  next.src   = preferThumb ? photoThumbUrl(photo) : photoUrl(photo);
   next.alt   = photo.name;
   // Base styles — fit will be applied once photo dimensions are known
   next.style.cssText  = 'display:block;width:100%;height:100%;position:absolute;inset:0;';

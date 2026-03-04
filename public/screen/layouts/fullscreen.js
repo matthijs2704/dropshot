@@ -2,6 +2,7 @@
 
 import { applySmartFit }  from '../fit.js';
 import { startKenBurns }  from '../transitions.js';
+import { photoUrl }       from '../../shared/utils.js';
 
 /**
  * Build a fullscreen layout element.
@@ -21,7 +22,7 @@ export function buildFullscreen(photo) {
   wrap.className = 'fs-wrap';
 
   const img = document.createElement('img');
-  img.src   = photo.displayUrl || photo.url;
+  img.src   = photoUrl(photo);
   img.alt   = photo.name;
   applySmartFit(img, photo, false); // fullscreen slot is always landscape
   wrap.appendChild(img);

@@ -4,6 +4,7 @@
 
 import { applySmartFit } from '../fit.js';
 import { startKenBurns } from '../transitions.js';
+import { photoUrl }      from '../../shared/utils.js';
 
 /**
  * @param {Object[]} photos - Expects at least 2 photos; [0] = hero, [1] = support
@@ -29,7 +30,7 @@ export function buildFeaturedDuo(photos) {
 
     if (photo) {
       const img = document.createElement('img');
-      img.src   = photo.displayUrl || photo.url;
+      img.src   = photoUrl(photo);
       img.alt   = photo.name;
       applySmartFit(img, photo, def.portrait);
       slot.appendChild(img);

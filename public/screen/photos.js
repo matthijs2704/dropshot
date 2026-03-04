@@ -113,7 +113,7 @@ setInterval(() => {
 // Group filtering
 // ---------------------------------------------------------------------------
 
-function getReadyPhotos(cfg) {
+function __getReadyPhotos(cfg) {
   const all = Array.from(photoRegistry.values()).filter(p => p.status === 'ready');
   if (!all.length) return [];
 
@@ -152,7 +152,7 @@ function getReadyPhotos(cfg) {
  * @param {number}   recencyBias - 0..100
  * @returns {Map<string, number>}
  */
-function buildRelativeRecencyMap(pool, recencyBias) {
+function __buildRelativeRecencyMap(pool, recencyBias) {
   const map = new Map();
   if (!pool.length) return map;
 
@@ -195,7 +195,7 @@ function buildRelativeRecencyMap(pool, recencyBias) {
  * @param {number}          now
  * @returns {number} weight (> 0)
  */
-function photoWeight(photo, recencyMap, now) {
+function __photoWeight(photo, recencyMap, now) {
   // 1. Relative recency multiplier
   const recencyMult = recencyMap.get(photo.id) ?? 1.0;
 
@@ -248,7 +248,7 @@ function _isPortrait(photo) {
  * @returns {Object[]}
  */
 export function pickPhotos(count, cfg, excludeIds = [], hardExcludeOtherScreen = false, options = {}) {
-  const pool = getReadyPhotos(cfg);
+  const pool = _getReadyPhotos(cfg);
   if (!pool.length) return [];
 
   const orientation = options.orientation || 'any';
@@ -260,7 +260,7 @@ export function pickPhotos(count, cfg, excludeIds = [], hardExcludeOtherScreen =
   const recencyBias = cfg.recencyBias ?? 60;
   const now         = Date.now();
   const excludeSet  = new Set(excludeIds);
-  const recencyMap  = buildRelativeRecencyMap(pool, recencyBias);
+  const recencyMap  = _buildRelativeRecencyMap(pool, recencyBias);
 
   const picked   = [];
   const pickedSet = new Set();
@@ -281,7 +281,7 @@ export function pickPhotos(count, cfg, excludeIds = [], hardExcludeOtherScreen =
       if (orientation === 'landscape' && enforceOrientation && isPortrait) continue;
       if (orientation === 'portrait' && enforceOrientation && !isPortrait) continue;
 
-      let w = photoWeight(photo, recencyMap, now);
+      let w = _photoWeight(photo, recencyMap, now);
       if (!enforceOrientation && orientation !== 'any') {
         const matchesOrientation = orientation === 'portrait' ? isPortrait : !isPortrait;
         if (matchesOrientation) w *= orientationBoost;
@@ -309,7 +309,7 @@ export function pickPhotos(count, cfg, excludeIds = [], hardExcludeOtherScreen =
           : (recentCandidates.length > 0 ? recentCandidates : recentFallbacks));
     if (!bestPool.length) break;
 
-    const chosen = weightedRandom(bestPool);
+    const chosen = _weightedRandom(bestPool);
     if (!chosen) break;
 
     picked.push(chosen);
@@ -330,7 +330,7 @@ export function pickPhotos(count, cfg, excludeIds = [], hardExcludeOtherScreen =
  * @param {{ photo: Object, w: number }[]} candidates
  * @returns {Object|null} the selected photo
  */
-function weightedRandom(candidates) {
+function __weightedRandom(candidates) {
   const total = candidates.reduce((s, c) => s + c.w, 0);
   if (total <= 0) return candidates[Math.floor(Math.random() * candidates.length)]?.photo || null;
 
@@ -372,7 +372,7 @@ export function markAsHeroShown(photoId) {
  * @returns {Object|null}
  */
 export function pickHeroPhoto(cfg, heroLocks, myScreenId, options = {}) {
-  const pool = getReadyPhotos(cfg);
+  const pool = _getReadyPhotos(cfg);
   if (!pool.length) return null;
 
   const orientation = options.orientation || 'any';
@@ -381,7 +381,7 @@ export function pickHeroPhoto(cfg, heroLocks, myScreenId, options = {}) {
 
   const now           = Date.now();
   const recencyBias   = cfg.recencyBias ?? 60;
-  const recencyMap    = buildRelativeRecencyMap(pool, recencyBias);
+  const recencyMap    = _buildRelativeRecencyMap(pool, recencyBias);
 
   // Scale cooldown: smaller pool → shorter cooldown so screens don't go blank
   const baseCooldownSec  = cfg.heroCooldownSec || 30;
@@ -409,8 +409,8 @@ export function pickHeroPhoto(cfg, heroLocks, myScreenId, options = {}) {
     if (now - shownAt < cooldownMs) continue;
 
     // Score: use recency weight, then boost heroCandidate to HERO_CANDIDATE_HERO_BOOST
-    // (replaces the base HERO_CANDIDATE_BOOST already baked into photoWeight)
-    let w = photoWeight(photo, recencyMap, now);
+    // (replaces the base HERO_CANDIDATE_BOOST already baked into _photoWeight)
+    let w = _photoWeight(photo, recencyMap, now);
     if (photo.heroCandidate) w = (w / HERO_CANDIDATE_BOOST) * HERO_CANDIDATE_HERO_BOOST;
 
     if (!enforceOrientation && orientation !== 'any') {
@@ -422,7 +422,7 @@ export function pickHeroPhoto(cfg, heroLocks, myScreenId, options = {}) {
   }
 
   if (!candidates.length) return null;
-  return weightedRandom(candidates);
+  return _weightedRandom(candidates);
 }
 
 // ---------------------------------------------------------------------------
@@ -439,7 +439,7 @@ export function pickHeroPhoto(cfg, heroLocks, myScreenId, options = {}) {
  * @returns {Object[]}
  */
 export function pickNewestPhotos(count, cfg, excludeIds = [], options = {}) {
-  const pool      = getReadyPhotos(cfg);
+  const pool      = _getReadyPhotos(cfg);
   const excludeSet = new Set(excludeIds);
   const orientation = options.orientation || 'any';
   const enforceOrientation = options.enforceOrientation !== false;

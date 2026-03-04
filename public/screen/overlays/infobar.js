@@ -10,29 +10,34 @@
 
 import { fmtDuration, el }                                      from '../../../shared/utils.js';
 import { startTickerScroll, startTickerFade, filterTickerMessages } from './_overlay-utils.js';
+import { resolveEventSlots }                                      from './event-resolver.js';
 
 const EVENT_FADE_MS       = 370;   // fade-out duration for event slot transitions
 const COUNTDOWN_TICK_MS   = 500;   // countdown refresh interval
 const DEFAULT_INFOBAR_H   = 40;    // default bar height in px
 const DEFAULT_FONT_SIZE   = 15;    // default font size in px
 
-let _barEl        = null;
-let _clockEl      = null;
-let _eventEl      = null;
-let _eventLabelEl = null;
-let _eventNameEl  = null;
-let _eventLocEl   = null;
-let _eventTimeEl  = null;
-let _event2El      = null;
-let _event2LabelEl = null;
-let _event2NameEl  = null;
-let _event2LocEl   = null;
-let _event2TimeEl  = null;
-let _tickerEl     = null;
-let _tickerInner  = null;
+/** DOM element references — grouped to reduce module-level let count. */
+const _dom = {
+  bar:         null,
+  clock:       null,
+  event:       null,
+  eventLabel:  null,
+  eventName:   null,
+  eventLoc:    null,
+  eventTime:   null,
+  event2:      null,
+  event2Label: null,
+  event2Name:  null,
+  event2Loc:   null,
+  event2Time:  null,
+  ticker:      null,
+  tickerInner: null,
+};
 
-let _clockTimer      = null;
-let _countdownTimer  = null;
+/** Timer IDs */
+let _clockTimer     = null;
+let _countdownTimer = null;
 
 /**
  * Snapshot of the last-rendered event slot state.
@@ -60,14 +65,14 @@ function _formatClock() {
 
 function _startClock() {
   if (_clockTimer) return;
-  if (_clockEl) _clockEl.textContent = _formatClock();
+  if (_dom.clock) _dom.clock.textContent = _formatClock();
   // Align tick to next minute boundary for clean transitions
   const now = new Date();
   const msToNextMin = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
   setTimeout(() => {
-    if (_clockEl) _clockEl.textContent = _formatClock();
+    if (_dom.clock) _dom.clock.textContent = _formatClock();
     _clockTimer = setInterval(() => {
-      if (_clockEl) _clockEl.textContent = _formatClock();
+      if (_dom.clock) _dom.clock.textContent = _formatClock();
     }, 60_000);
   }, msToNextMin + 50);
 }
@@ -83,102 +88,13 @@ function _stopClock() {
 /**
  * Determine what to display in the event slot(s) of the info bar.
  *
- * Returns `{ primary, secondary }` where each is either a slot descriptor
- * `{ name, loc, remaining, targetMs, kind }` or `null`.
- *
- * Resolution priority for the primary slot:
- *   1. Explicit alert (set via `setInfoBarAlert`)
- *   2. Next upcoming event whose countdown window (countdownFromMinutes) is active
- *   3. Currently-running event (started but not ended)
- *   4. Soonest future event with countdownFromMinutes = 0 (always-visible)
- *
- * The secondary slot is populated only when there is no ticker and both a
- * current event and a next-event-in-countdown-window coexist — allowing the
- * bar to show both simultaneously.
+ * Delegates to the pure `resolveEventSlots()` function, passing in the
+ * current module state.
  *
  * @returns {{ primary: Object|null, secondary: Object|null }}
  */
 function _resolveEventSlots() {
-  if (_alert) {
-    const target = Number(new Date(_alert.countdownTo || ''));
-    const remaining = Number.isFinite(target) ? target - Date.now() : null;
-    return {
-      primary: { name: _alert.message || '', loc: '', remaining, targetMs: target, kind: 'alert' },
-      secondary: null,
-    };
-  }
-
-  const now = Date.now();
-  const sorted = _schedule
-    .map(e => ({ e, startMs: Number(new Date(e.startTime)) }))
-    .filter(({ startMs }) => Number.isFinite(startMs))
-    .sort((a, b) => a.startMs - b.startMs);
-
-  const showCurrent = _cfg.infoBarShowCurrentEvent !== false;
-  const showNext    = _cfg.infoBarShowNextEvent    !== false;
-  const hasTicker   = Boolean(_tickerEl);
-
-  // Next events that are upcoming
-  const future = showNext ? sorted.filter(({ startMs }) => startMs > now) : [];
-
-  // Find the soonest next event inside its countdown window (cfm > 0)
-  let nextInWindow = null;
-  for (const { e, startMs } of future) {
-    const cfm = Number(e.countdownFromMinutes || 0);
-    if (cfm > 0 && now >= startMs - (cfm * 60 * 1000)) {
-      nextInWindow = { name: e.name || '', loc: e.location || '', remaining: startMs - now, targetMs: startMs, kind: 'next' };
-      break;
-    }
-  }
-
-  // Find current event — walk sorted backwards from the last past event
-  let current = null;
-  if (showCurrent) {
-    // Find the index of the last event that has already started
-    let lastPastIdx = -1;
-    for (let i = sorted.length - 1; i >= 0; i--) {
-      if (sorted[i].startMs <= now) { lastPastIdx = i; break; }
-    }
-    for (let i = lastPastIdx; i >= 0; i--) {
-      const { e } = sorted[i];
-      if (e.endTime) {
-        const endMs = Number(new Date(e.endTime));
-        if (Number.isFinite(endMs) && endMs <= now) continue;
-      } else {
-        // No explicit end time — the event ends when the next one in the schedule starts.
-        const nextEvStartMs = sorted[i + 1]?.startMs;
-        if (nextEvStartMs !== undefined && nextEvStartMs <= now) continue;
-      }
-      current = { name: e.name || '', loc: e.location || '', remaining: null, targetMs: null, kind: 'current' };
-      break;
-    }
-  }
-
-  // Both exist: primary = next-in-window (more urgent), secondary = current (when no ticker)
-  if (nextInWindow && current) {
-    return {
-      primary:   nextInWindow,
-      secondary: !hasTicker ? current : null,
-    };
-  }
-
-  // Only next-in-window
-  if (nextInWindow) return { primary: nextInWindow, secondary: null };
-
-  // Only current
-  if (current) return { primary: current, secondary: null };
-
-  // Fallback: soonest next with cfm=0 (always visible)
-  if (future.length) {
-    const { e, startMs } = future[0];
-    const cfm = Number(e.countdownFromMinutes || 0);
-    if (cfm === 0) {
-      return { primary: { name: e.name || '', loc: e.location || '', remaining: startMs - now, targetMs: startMs, kind: 'next' }, secondary: null };
-    }
-    return { primary: null, secondary: null };
-  }
-
-  return { primary: null, secondary: null };
+  return resolveEventSlots(_cfg, _schedule, _alert, Boolean(_dom.ticker));
 }
 
 // Apply a resolved slot object to a set of DOM elements.
@@ -254,12 +170,12 @@ function _fadeSlotTransition(slot, containerEl, labelEl, nameEl, locEl, timeEl) 
   }
 }
 function _refreshEventSlot() {
-  if (!_eventEl) return;
+  if (!_dom.event) return;
   const showCurrent = _cfg.infoBarShowCurrentEvent !== false;
   const showNext    = _cfg.infoBarShowNextEvent    !== false;
   if (!showCurrent && !showNext) {
-    _eventEl.style.display = 'none';
-    if (_event2El) _event2El.style.display = 'none';
+    _dom.event.style.display = 'none';
+    if (_dom.event2) _dom.event2.style.display = 'none';
     _updateDividers();
     return;
   }
@@ -279,16 +195,16 @@ function _refreshEventSlot() {
 
   if (!primaryChanged) {
     // Only the countdown number ticked — update in place without fading
-    if (primary && _eventTimeEl && newTimeVisible) {
-      _eventTimeEl.textContent = fmtDuration(primary.remaining);
+    if (primary && _dom.eventTime && newTimeVisible) {
+      _dom.eventTime.textContent = fmtDuration(primary.remaining);
     }
   } else {
     _prevEventSnapshot = { ...(_prevEventSnapshot), name: newName, timeVisible: newTimeVisible, visible: newVisible, kind: newKind };
-    _fadeSlotTransition(primary, _eventEl, _eventLabelEl, _eventNameEl, _eventLocEl, _eventTimeEl);
+    _fadeSlotTransition(primary, _dom.event, _dom.eventLabel, _dom.eventName, _dom.eventLoc, _dom.eventTime);
   }
 
   // ── Secondary slot ────────────────────────────────────────────────────────
-  if (_event2El) {
+  if (_dom.event2) {
     const newVisible2 = secondary !== null;
     const newName2    = secondary ? secondary.name : null;
 
@@ -297,15 +213,15 @@ function _refreshEventSlot() {
 
     if (!secondaryChanged) {
       // Only countdown ticked — update in place
-      if (secondary && _event2TimeEl) {
+      if (secondary && _dom.event2Time) {
         const rem2 = secondary.remaining;
         if (rem2 !== null && Number.isFinite(rem2) && rem2 > 0) {
-          _event2TimeEl.textContent = fmtDuration(rem2);
+          _dom.event2Time.textContent = fmtDuration(rem2);
         }
       }
     } else {
       _prevEventSnapshot = { ...(_prevEventSnapshot), name2: newName2, visible2: newVisible2 };
-      _fadeSlotTransition(secondary, _event2El, _event2LabelEl, _event2NameEl, _event2LocEl, _event2TimeEl);
+      _fadeSlotTransition(secondary, _dom.event2, _dom.event2Label, _dom.event2Name, _dom.event2Loc, _dom.event2Time);
     }
   }
 
@@ -335,13 +251,13 @@ function _stopCountdownTimer() {
 // ---------------------------------------------------------------------------
 
 function _startTicker() {
-  if (!_tickerInner) return;
+  if (!_dom.tickerInner) return;
   const mode    = _cfg.tickerMode  || 'scroll';
   const align   = _cfg.tickerAlign || 'start';
   if (mode === 'fade') {
-    _stopTickerAnim = startTickerFade(_tickerInner, _tickerMessages, _tickerDwellMs, align);
+    _stopTickerAnim = startTickerFade(_dom.tickerInner, _tickerMessages, _tickerDwellMs, align);
   } else {
-    _stopTickerAnim = startTickerScroll(_tickerInner, _cfg.tickerSpeed || 60);
+    _stopTickerAnim = startTickerScroll(_dom.tickerInner, _cfg.tickerSpeed || 60);
   }
 }
 
@@ -356,15 +272,15 @@ function _stopTicker() {
 
 // Rebuild dividers between visible slots.
 function _updateDividers() {
-  if (!_barEl) return;
-  for (const d of _barEl.querySelectorAll('.infobar-divider')) d.remove();
+  if (!_dom.bar) return;
+  for (const d of _dom.bar.querySelectorAll('.infobar-divider')) d.remove();
 
   const slots = [];
-  if (_clockEl && _cfg.infoBarShowClock) slots.push(_clockEl);
+  if (_dom.clock && _cfg.infoBarShowClock) slots.push(_dom.clock);
   const _showAnyEvent = _cfg.infoBarShowCurrentEvent !== false || _cfg.infoBarShowNextEvent !== false;
-  if (_eventEl && _showAnyEvent && _eventEl.style.display !== 'none') slots.push(_eventEl);
-  if (_event2El && _event2El.style.display !== 'none') slots.push(_event2El);
-  if (_tickerEl) slots.push(_tickerEl);
+  if (_dom.event && _showAnyEvent && _dom.event.style.display !== 'none') slots.push(_dom.event);
+  if (_dom.event2 && _dom.event2.style.display !== 'none') slots.push(_dom.event2);
+  if (_dom.ticker) slots.push(_dom.ticker);
 
   // Insert dividers between adjacent visible slots
   for (let i = 0; i < slots.length - 1; i++) {
@@ -403,34 +319,34 @@ function _buildBar(cfg) {
 
   // Clock slot
   if (cfg.infoBarShowClock !== false) {
-    _clockEl = el('div', { id: 'overlay-infobar-clock', text: _formatClock() });
-    bar.appendChild(_clockEl);
+    _dom.clock = el('div', { id: 'overlay-infobar-clock', text: _formatClock() });
+    bar.appendChild(_dom.clock);
   } else {
-    _clockEl = null;
+    _dom.clock = null;
   }
 
   // Event slot — shown when at least one of the two event flags is on
   const showAnyEvent = cfg.infoBarShowCurrentEvent !== false || cfg.infoBarShowNextEvent !== false;
   if (showAnyEvent) {
-    ({ slotEl: _eventEl, labelEl: _eventLabelEl, nameEl: _eventNameEl,
-       locEl: _eventLocEl, timeEl: _eventTimeEl } = _makeEventSlot(''));
-    bar.appendChild(_eventEl);
+    ({ slotEl: _dom.event, labelEl: _dom.eventLabel, nameEl: _dom.eventName,
+       locEl: _dom.eventLoc, timeEl: _dom.eventTime } = _makeEventSlot(''));
+    bar.appendChild(_dom.event);
 
     // Second event slot — only visible when secondary event is resolved (no ticker + both current & next)
-    ({ slotEl: _event2El, labelEl: _event2LabelEl, nameEl: _event2NameEl,
-       locEl: _event2LocEl, timeEl: _event2TimeEl } = _makeEventSlot('2'));
-    bar.appendChild(_event2El);
+    ({ slotEl: _dom.event2, labelEl: _dom.event2Label, nameEl: _dom.event2Name,
+       locEl: _dom.event2Loc, timeEl: _dom.event2Time } = _makeEventSlot('2'));
+    bar.appendChild(_dom.event2);
   } else {
-    _eventEl = null;
-    _eventLabelEl = null;
-    _eventNameEl = null;
-    _eventLocEl = null;
-    _eventTimeEl = null;
-    _event2El = null;
-    _event2LabelEl = null;
-    _event2NameEl = null;
-    _event2LocEl = null;
-    _event2TimeEl = null;
+    _dom.event = null;
+    _dom.eventLabel = null;
+    _dom.eventName = null;
+    _dom.eventLoc = null;
+    _dom.eventTime = null;
+    _dom.event2 = null;
+    _dom.event2Label = null;
+    _dom.event2Name = null;
+    _dom.event2Loc = null;
+    _dom.event2Time = null;
   }
 
   // Ticker slot — only shown when ticker is enabled and has messages
@@ -440,26 +356,26 @@ function _buildBar(cfg) {
     const mode  = cfg.tickerMode  || 'scroll';
     const align = cfg.tickerAlign || 'start';
 
-    _tickerEl    = el('div', { id: 'overlay-infobar-ticker' });
-    _tickerInner = el('div', { id: 'overlay-infobar-ticker-inner' });
+    _dom.ticker      = el('div', { id: 'overlay-infobar-ticker' });
+    _dom.tickerInner = el('div', { id: 'overlay-infobar-ticker-inner' });
 
     if (mode === 'fade') {
       // Alignment applies in fade mode — set justify-content on container
-      if (align === 'center') _tickerEl.style.justifyContent = 'center';
-      else if (align === 'end') _tickerEl.style.justifyContent = 'flex-end';
+      if (align === 'center') _dom.ticker.style.justifyContent = 'center';
+      else if (align === 'end') _dom.ticker.style.justifyContent = 'flex-end';
       // else default: flex-start
-      _tickerInner.textContent = rawMessages[0];
+      _dom.tickerInner.textContent = rawMessages[0];
     } else {
       // Scroll mode: all messages joined, entry from right
-      _tickerInner.textContent = rawMessages.join('\u2003\u00b7\u2003');
-      _tickerInner.style.paddingLeft = '100%';
+      _dom.tickerInner.textContent = rawMessages.join('\u2003\u00b7\u2003');
+      _dom.tickerInner.style.paddingLeft = '100%';
     }
 
-    _tickerEl.appendChild(_tickerInner);
-    bar.appendChild(_tickerEl);
+    _dom.ticker.appendChild(_dom.tickerInner);
+    bar.appendChild(_dom.ticker);
   } else {
-    _tickerEl    = null;
-    _tickerInner = null;
+    _dom.ticker      = null;
+    _dom.tickerInner = null;
   }
 
   return bar;
@@ -484,28 +400,28 @@ export function mountInfoBar(cfg, schedule) {
   _tickerMessages = filterTickerMessages(_cfg.tickerMessages);
   _tickerDwellMs  = Math.max(500, (Number(_cfg.tickerFadeDwellSec) || 5) * 1000);
 
-  _barEl = _buildBar(_cfg);
+  _dom.bar = _buildBar(_cfg);
   if (_cfg.infoBarFontSize) {
     const fs = _cfg.infoBarFontSize;
-    _barEl.style.setProperty('--infobar-font-size', `${fs}px`);
+    _dom.bar.style.setProperty('--infobar-font-size', `${fs}px`);
     // Scale height proportionally when the user picks a non-default font size.
     // When fs == DEFAULT_FONT_SIZE we leave --infobar-height alone so the theme
     // CSS variable (e.g. camp's 60px) is not clobbered by the JS override.
     if (fs !== DEFAULT_FONT_SIZE) {
       const scaledHeight  = Math.round((fs / DEFAULT_FONT_SIZE) * DEFAULT_INFOBAR_H);
-      _barEl.style.setProperty('--infobar-height', `${scaledHeight}px`);
+      _dom.bar.style.setProperty('--infobar-height', `${scaledHeight}px`);
       // Also set on :root so hoisted theme elements (e.g. camp gold border) track it
       document.documentElement.style.setProperty('--infobar-height', `${scaledHeight}px`);
     }
   }
-  document.body.appendChild(_barEl);
+  document.body.appendChild(_dom.bar);
 
   // After mount, read the actual rendered height and publish it on :root so that
   // hoisted theme elements (e.g. the camp gold border) can position themselves
   // relative to the bar using var(--infobar-height).
   requestAnimationFrame(() => {
-    if (!_barEl) return;
-    const h = _barEl.offsetHeight;
+    if (!_dom.bar) return;
+    const h = _dom.bar.offsetHeight;
     if (h > 0) document.documentElement.style.setProperty('--infobar-height', `${h}px`);
   });
 
@@ -517,7 +433,7 @@ export function mountInfoBar(cfg, schedule) {
     _refreshEventSlot();
     _startCountdownTimer();
   }
-  if (_tickerInner) _startTicker();
+  if (_dom.tickerInner) _startTicker();
 
   _updateDividers();
 }
@@ -529,11 +445,9 @@ export function removeInfoBar() {
   _stopClock();
   _stopCountdownTimer();
   _stopTicker();
-  if (_barEl) { _barEl.remove(); _barEl = null; }
+  if (_dom.bar) { _dom.bar.remove(); }
   document.documentElement.style.removeProperty('--infobar-height');
-  _clockEl = _eventEl = _eventLabelEl = _eventNameEl = _eventLocEl = _eventTimeEl = null;
-  _event2El = _event2LabelEl = _event2NameEl = _event2LocEl = _event2TimeEl = null;
-  _tickerEl = _tickerInner = null;
+  for (const k of Object.keys(_dom)) _dom[k] = null;
   _alert = null;
   _tickerMessages = [];
   _prevEventSnapshot = { name: null, timeVisible: null, visible: null, kind: null, name2: null, visible2: null };
@@ -575,13 +489,13 @@ export function clearInfoBarAlert(alertId) {
  * Used by the orchestrator to compute safe insets for bugs/qr-bugs.
  */
 export function getInfoBarHeight() {
-  if (!_barEl) return 0;
-  return _barEl.offsetHeight || 40;
+  if (!_dom.bar) return 0;
+  return _dom.bar.offsetHeight || 40;
 }
 
 /**
  * Returns true if the info bar is currently mounted in the DOM.
  */
 export function isInfoBarMounted() {
-  return _barEl !== null;
+  return _dom.bar !== null;
 }

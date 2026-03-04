@@ -35,15 +35,17 @@ export function updateWs(ws) {
 function sendHeartbeat() {
   if (!_ws || _ws.readyState !== 1) return;
   const state = _getState ? _getState() : {};
-  _ws.send(JSON.stringify({
-    type:               'screen_heartbeat',
-    screenId:           _screenId,
-    layoutType:         state.layoutType         || null,
-    focusGroup:         state.focusGroup         || null,
-    visibleIds:         state.visibleIds         || [],
-    lastCycleAt:        state.lastCycleAt        || 0,
-    lastCycleDurationMs: state.lastCycleDurationMs || null,
-  }));
+  try {
+    _ws.send(JSON.stringify({
+      type:               'screen_heartbeat',
+      screenId:           _screenId,
+      layoutType:         state.layoutType         || null,
+      focusGroup:         state.focusGroup         || null,
+      visibleIds:         state.visibleIds         || [],
+      lastCycleAt:        state.lastCycleAt        || 0,
+      lastCycleDurationMs: state.lastCycleDurationMs || null,
+    }));
+  } catch {}
 }
 
 /**
@@ -56,10 +58,12 @@ function sendHeartbeat() {
  */
 export function claimHero(ws, screenId, photoId, ttlSec) {
   if (!ws || ws.readyState !== 1) return;
-  ws.send(JSON.stringify({
-    type:     'hero_claim',
-    screenId,
-    photoId,
-    ttlSec,
-  }));
+  try {
+    ws.send(JSON.stringify({
+      type:     'hero_claim',
+      screenId,
+      photoId,
+      ttlSec,
+    }));
+  } catch {}
 }

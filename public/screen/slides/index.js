@@ -165,22 +165,24 @@ export async function runNextSlide(currentDisplayEl) {
   // slide_advance; non-coordinated use the legacy slide_ended.
   if (_ws && _ws.readyState === 1) {
     const activePl = _getActivePlaylist();
-    if (activePl?.coordinated) {
-      _ws.send(JSON.stringify({
-        type: 'slide_ready',
-        slideId: slide.id,
-        playlistId: activePl.id,
-        screenId: _screenId,
-      }));
-      // Wait for server to say "go" before returning control to the cycle
-      await _waitForAdvance(activePl.id);
-    } else {
-      _ws.send(JSON.stringify({
-        type: 'slide_ended',
-        slideId: slide.id,
-        screenId: _screenId,
-      }));
-    }
+    try {
+      if (activePl?.coordinated) {
+        _ws.send(JSON.stringify({
+          type: 'slide_ready',
+          slideId: slide.id,
+          playlistId: activePl.id,
+          screenId: _screenId,
+        }));
+        // Wait for server to say "go" before returning control to the cycle
+        await _waitForAdvance(activePl.id);
+      } else {
+        _ws.send(JSON.stringify({
+          type: 'slide_ended',
+          slideId: slide.id,
+          screenId: _screenId,
+        }));
+      }
+    } catch {}
   }
 
   return true;

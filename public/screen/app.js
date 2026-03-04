@@ -164,7 +164,7 @@ async function handleMessage(msg) {
         const knownIds = Array.from(photoRegistry.keys());
         const totalPhotos = Number(msg.totalPhotos || 0);
         if (totalPhotos > 0 || knownIds.length > 0) showSyncStatus(0, totalPhotos);
-        ws.send(JSON.stringify({ type: 'sync_photos', knownIds }));
+        try { ws.send(JSON.stringify({ type: 'sync_photos', knownIds })); } catch {}
       }
       break;
 

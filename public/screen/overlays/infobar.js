@@ -11,6 +11,11 @@
 import { fmtDuration, el }                     from '../../../shared/utils.js';
 import { startTickerScroll, startTickerFade } from './_overlay-utils.js';
 
+const EVENT_FADE_MS       = 370;   // fade-out duration for event slot transitions
+const COUNTDOWN_TICK_MS   = 500;   // countdown refresh interval
+const DEFAULT_INFOBAR_H   = 40;    // default bar height in px
+const DEFAULT_FONT_SIZE   = 15;    // default font size in px
+
 let _barEl        = null;
 let _clockEl      = null;
 let _eventEl      = null;
@@ -234,7 +239,7 @@ function _refreshEventSlot() {
       setTimeout(() => {
         _applySlotToEl(primary, _eventEl, _eventLabelEl, _eventNameEl, _eventLocEl, _eventTimeEl);
         _eventEl.style.opacity = '1';
-      }, 370);
+      }, EVENT_FADE_MS);
     }
   }
 
@@ -266,7 +271,7 @@ function _refreshEventSlot() {
         setTimeout(() => {
           _applySlotToEl(secondary, _event2El, _event2LabelEl, _event2NameEl, _event2LocEl, _event2TimeEl);
           _event2El.style.opacity = '1';
-        }, 370);
+        }, EVENT_FADE_MS);
       }
     }
   }
@@ -285,7 +290,7 @@ function _startCountdownTimer() {
         _alert = null;
       }
     }
-  }, 500);
+  }, COUNTDOWN_TICK_MS);
 }
 
 function _stopCountdownTimer() {
@@ -451,12 +456,10 @@ export function mountInfoBar(cfg, schedule) {
     const fs = _cfg.infoBarFontSize;
     _barEl.style.setProperty('--infobar-font-size', `${fs}px`);
     // Scale height proportionally when the user picks a non-default font size.
-    // When fs == 15 (default) we leave --infobar-height alone so the theme CSS
-    // variable (e.g. camp's 60px) is not clobbered by the JS override.
-    if (fs !== 15) {
-      const defaultHeight = 40;
-      const defaultFs     = 15;
-      const scaledHeight  = Math.round((fs / defaultFs) * defaultHeight);
+    // When fs == DEFAULT_FONT_SIZE we leave --infobar-height alone so the theme
+    // CSS variable (e.g. camp's 60px) is not clobbered by the JS override.
+    if (fs !== DEFAULT_FONT_SIZE) {
+      const scaledHeight  = Math.round((fs / DEFAULT_FONT_SIZE) * DEFAULT_INFOBAR_H);
       _barEl.style.setProperty('--infobar-height', `${scaledHeight}px`);
       // Also set on :root so hoisted theme elements (e.g. camp gold border) track it
       document.documentElement.style.setProperty('--infobar-height', `${scaledHeight}px`);

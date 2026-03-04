@@ -3,6 +3,31 @@
 import { lerp, shuffle }  from '../../shared/utils.js';
 import { clearPreloaded, isPreloaded } from './preload.js';
 
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const RECENTLY_SHOWN_TTL_MS   = 10 * 60 * 1000; // purge entries older than 10 min
+const HERO_SHOWN_TTL_MS       = 15 * 60 * 1000; // purge hero timestamps older than 15 min
+const SHOW_COUNT_HALVE_THRESH = 200;             // halve all counts when max exceeds this
+const CLEANUP_INTERVAL_MS     = 60_000;          // periodic cleanup tick
+
+const RECENTLY_SHOWN_PUSHBACK_MS = 90_000;  // within 90 s → heavy weight penalty
+const RECENTLY_SHOWN_PENALTY     = 0.05;    // multiplier when inside pushback window
+const RECENCY_FLOOR              = 0.05;    // weight floor for oldest photo at bias=100
+const FAIRNESS_DECAY             = 0.5;     // penalty = 1 / (1 + count × decay)
+const UNPRELOADED_PENALTY        = 0.15;    // multiplier for photos not yet in browser cache
+const HERO_CANDIDATE_BOOST       = 2.0;     // weight boost for heroCandidate in normal picks
+const HERO_CANDIDATE_HERO_BOOST  = 3.0;     // weight boost for heroCandidate in hero picks
+const DEFAULT_ORIENTATION_BOOST  = 1.35;    // soft preference multiplier for matching orientation
+const HERO_ORIENTATION_BOOST     = 1.25;    // orientation boost in hero picker
+
+// Aspect-ratio scoring targets for arrangePhotosForSlots()
+const PORTRAIT_SLOT_TARGET_RATIO = 0.82;    // ideal w/h for portrait slots (≈3:4)
+const PORTRAIT_MATCH_BONUS       = 0.25;    // extra fit score when photo is actually portrait
+const NORMAL_SLOT_TARGET_RATIO   = 1.3;     // ideal w/h for standard slots (≈4:3)
+const HERO_LANDSCAPE_PENALTY     = 0.5;     // penalty multiplier for portrait photos in hero slots
+
 /** @type {Map<string, Object>} All known photos keyed by id */
 export const photoRegistry = new Map();
 
@@ -67,10 +92,10 @@ export function setOtherVisibleIds(ids) {
 setInterval(() => {
   const now = Date.now();
   for (const [id, ts] of recentlyShown) {
-    if (now - ts > 10 * 60 * 1000) recentlyShown.delete(id);
+    if (now - ts > RECENTLY_SHOWN_TTL_MS) recentlyShown.delete(id);
   }
   for (const [id, ts] of heroShownAt) {
-    if (now - ts > 15 * 60 * 1000) heroShownAt.delete(id);
+    if (now - ts > HERO_SHOWN_TTL_MS) heroShownAt.delete(id);
   }
 
   // Periodically halve all show-counts so long-running events don't accumulate
@@ -78,11 +103,11 @@ setInterval(() => {
   if (showCounts.size > 0) {
     let maxCount = 0;
     for (const c of showCounts.values()) { if (c > maxCount) maxCount = c; }
-    if (maxCount > 200) {
+    if (maxCount > SHOW_COUNT_HALVE_THRESH) {
       for (const [id, c] of showCounts) showCounts.set(id, Math.floor(c / 2));
     }
   }
-}, 60_000);
+}, CLEANUP_INTERVAL_MS);
 
 // ---------------------------------------------------------------------------
 // Group filtering
@@ -135,8 +160,8 @@ function buildRelativeRecencyMap(pool, recencyBias) {
   const sorted = [...pool].sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
   const n      = sorted.length;
 
-  // floor: bias=0 → 1.0 (flat), bias=100 → 0.05
-  const floor = lerp(1.0, 0.05, recencyBias / 100);
+  // floor: bias=0 → 1.0 (flat), bias=100 → RECENCY_FLOOR
+  const floor = lerp(1.0, RECENCY_FLOOR, recencyBias / 100);
 
   sorted.forEach((photo, rank) => {
     // t=0 for newest, t=1 for oldest
@@ -176,18 +201,18 @@ function photoWeight(photo, recencyMap, now) {
 
   // 2. Fairness penalty
   const count        = showCounts.get(photo.id) || 0;
-  const fairnessMult = 1 / (1 + count * 0.5);
+  const fairnessMult = 1 / (1 + count * FAIRNESS_DECAY);
 
-  // 3. Recently-shown pushback (within last 90 s)
+  // 3. Recently-shown pushback (within last RECENTLY_SHOWN_PUSHBACK_MS)
   const shownAt    = recentlyShown.get(photo.id) || 0;
   const recentAge  = now - shownAt;
-  const recentMult = recentAge < 90_000 ? 0.05 : 1.0;
+  const recentMult = recentAge < RECENTLY_SHOWN_PUSHBACK_MS ? RECENTLY_SHOWN_PENALTY : 1.0;
 
   // 4. heroCandidate flag
-  const heroBump = photo.heroCandidate ? 2.0 : 1.0;
+  const heroBump = photo.heroCandidate ? HERO_CANDIDATE_BOOST : 1.0;
 
   // 5. Prefer images already preloaded in browser cache
-  const preloadMult = isPreloaded(photo.id) ? 1.0 : 0.15;
+  const preloadMult = isPreloaded(photo.id) ? 1.0 : UNPRELOADED_PENALTY;
 
   return recencyMult * fairnessMult * recentMult * heroBump * preloadMult;
 }
@@ -228,7 +253,7 @@ export function pickPhotos(count, cfg, excludeIds = [], hardExcludeOtherScreen =
 
   const orientation = options.orientation || 'any';
   const enforceOrientation = options.enforceOrientation !== false;
-  const orientationBoost = Number(options.orientationBoost || 1.35);
+  const orientationBoost = Number(options.orientationBoost || DEFAULT_ORIENTATION_BOOST);
   const avoidRecentMs = Number(options.avoidRecentMs || 0);
   const allowRecentFallback = options.allowRecentFallback !== false;
 
@@ -352,7 +377,7 @@ export function pickHeroPhoto(cfg, heroLocks, myScreenId, options = {}) {
 
   const orientation = options.orientation || 'any';
   const enforceOrientation = options.enforceOrientation !== false;
-  const orientationBoost = Number(options.orientationBoost || 1.25);
+  const orientationBoost = Number(options.orientationBoost || HERO_ORIENTATION_BOOST);
 
   const now           = Date.now();
   const recencyBias   = cfg.recencyBias ?? 60;
@@ -383,9 +408,10 @@ export function pickHeroPhoto(cfg, heroLocks, myScreenId, options = {}) {
     const shownAt = heroShownAt.get(photo.id) || 0;
     if (now - shownAt < cooldownMs) continue;
 
-    // Score: use recency weight, then boost heroCandidate to 3× (replaces base 2×)
+    // Score: use recency weight, then boost heroCandidate to HERO_CANDIDATE_HERO_BOOST
+    // (replaces the base HERO_CANDIDATE_BOOST already baked into photoWeight)
     let w = photoWeight(photo, recencyMap, now);
-    if (photo.heroCandidate) w = (w / 2.0) * 3.0; // undo base 2× and apply 3×
+    if (photo.heroCandidate) w = (w / HERO_CANDIDATE_BOOST) * HERO_CANDIDATE_HERO_BOOST;
 
     if (!enforceOrientation && orientation !== 'any') {
       const matchesOrientation = orientation === 'portrait' ? isPortrait : !isPortrait;
@@ -485,12 +511,12 @@ export function arrangePhotosForSlots(slots, photos) {
       let fit     = 0;
 
       if (slot.portrait) {
-        fit = -Math.abs(ratio - 0.82);
-        if (_isPortrait(p)) fit += 0.25;
+        fit = -Math.abs(ratio - PORTRAIT_SLOT_TARGET_RATIO);
+        if (_isPortrait(p)) fit += PORTRAIT_MATCH_BONUS;
       } else if (slot.hero) {
-        fit = ratio >= 1 ? ratio : ratio * 0.5;
+        fit = ratio >= 1 ? ratio : ratio * HERO_LANDSCAPE_PENALTY;
       } else {
-        fit = -Math.abs(ratio - 1.3);
+        fit = -Math.abs(ratio - NORMAL_SLOT_TARGET_RATIO);
       }
 
       if (fit > bestFit) {

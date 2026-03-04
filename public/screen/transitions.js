@@ -129,6 +129,9 @@ export function crossFadeSlot(slot, photo, durationMs) {
   slot.dataset.photoId = photo.id;
 }
 
+const MIN_KENBURNS_DURATION_MS = 4000;
+const DEFAULT_LAYOUT_DURATION_MS = 8000;
+
 /**
  * Ken Burns effect: slow pan + zoom on a fullscreen or hero image.
  *
@@ -144,7 +147,7 @@ export function crossFadeSlot(slot, photo, durationMs) {
  * @param {number} durationMs - should equal layoutDuration
  */
 export function startKenBurns(img, durationMs) {
-  const dur = Math.max(durationMs || 8000, 4000);
+  const dur = Math.max(durationMs || DEFAULT_LAYOUT_DURATION_MS, MIN_KENBURNS_DURATION_MS);
 
   // Each preset: [fromScale, fromOriginX%, fromOriginY%] → [toScale, toOriginX%, toOriginY%]
   // Scale range 1.00–1.06 — subtle enough to feel cinematic without being distracting.

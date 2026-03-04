@@ -32,6 +32,17 @@ import {
 import { getBottomInset } from '../overlays/index.js';
 import { getScreenCfg } from '../../shared/utils.js';
 
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const POST_SLIDE_DELAY_MS   = 500;    // pause after slide before next photo cycle
+const NO_CONFIG_RETRY_MS    = 1000;   // retry interval when config not yet available
+const DEFAULT_LAYOUT_DUR_MS = 8000;   // fallback layout duration
+const DEFAULT_HERO_LOCK_SEC = 30;     // cross-screen hero lock TTL
+const POLAROID_MIN_COUNT    = 5;
+const POLAROID_MAX_COUNT    = 10;
+
 // Display state shared with heartbeat
 export const displayState = {
   layoutType:          null,
@@ -117,7 +128,7 @@ function readyPoolSize(cfg) {
 
 async function runCycle() {
   if (!_running || !_config) {
-    _cycleTimer = setTimeout(runCycle, 1000);
+    _cycleTimer = setTimeout(runCycle, NO_CONFIG_RETRY_MS);
     return;
   }
 
@@ -140,7 +151,7 @@ async function runCycle() {
       _currentEl = children[children.length - 1] || _currentEl;
       for (const child of children.slice(0, -1)) child.remove();
 
-      _cycleTimer = setTimeout(runCycle, 500);
+      _cycleTimer = setTimeout(runCycle, POST_SLIDE_DELAY_MS);
       return;
     }
     // Nothing played (no playlist / all disabled) — fall through to photo cycle
@@ -189,7 +200,7 @@ async function runCycle() {
 
   let built;
   let mosaicSlotEls = null;
-  let duration = cfg.layoutDuration || 8000;
+  let duration = cfg.layoutDuration || DEFAULT_LAYOUT_DUR_MS;
 
   // --- Social wall submissions ---
   if (layoutType === 'submissionwall') {
@@ -217,7 +228,7 @@ async function runCycle() {
     const photo = hero || pickPhotos(1, cfg, [], true, { orientation: 'landscape' })[0] || null;
 
     if (photo) {
-      _claimHero(photo.id, cfg.crossScreenHeroLockSec || 30);
+      _claimHero(photo.id, cfg.crossScreenHeroLockSec || DEFAULT_HERO_LOCK_SEC);
       markAsHeroShown(photo.id);
     }
 
@@ -243,7 +254,7 @@ async function runCycle() {
     const hero   = pickHeroPhoto(cfg, _heroLocks, _screenId, { orientation: 'landscape' });
     const heroP  = hero || pickPhotos(1, cfg, [], true, { orientation: 'landscape' })[0] || null;
     if (heroP) {
-      _claimHero(heroP.id, cfg.crossScreenHeroLockSec || 30);
+      _claimHero(heroP.id, cfg.crossScreenHeroLockSec || DEFAULT_HERO_LOCK_SEC);
       markAsHeroShown(heroP.id);
     }
     const support = pickPhotos(1, cfg, heroP ? [heroP.id] : [], true, {
@@ -259,8 +270,8 @@ async function runCycle() {
 
   // --- Polaroid ---
   else if (!built && layoutType === 'polaroid') {
-    const polaroidCount = 5 + Math.floor(Math.random() * 6); // 5–10
-    const photos = pickPhotos(Math.min(polaroidCount, 10), cfg, [], false);
+    const polaroidCount = POLAROID_MIN_COUNT + Math.floor(Math.random() * (POLAROID_MAX_COUNT - POLAROID_MIN_COUNT + 1));
+    const photos = pickPhotos(Math.min(polaroidCount, POLAROID_MAX_COUNT), cfg, [], false);
     built = buildPolaroid(photos);
     displayState.layoutType = 'polaroid';
   }
@@ -282,7 +293,7 @@ async function runCycle() {
         : { orientation: 'landscape' };
       heroPhoto = pickHeroPhoto(cfg, _heroLocks, _screenId, heroOptions);
       if (heroPhoto) {
-        _claimHero(heroPhoto.id, cfg.crossScreenHeroLockSec || 30);
+        _claimHero(heroPhoto.id, cfg.crossScreenHeroLockSec || DEFAULT_HERO_LOCK_SEC);
         markAsHeroShown(heroPhoto.id);
       }
     }

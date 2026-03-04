@@ -87,9 +87,12 @@ export function buildPolaroid(photos) {
 
   // Card sizing — large but scales down gently for higher counts.
   // Overlap is intentional; each card is fully visible before the next lands.
-  const PHOTO_VH  = count <= 5 ? 48 : count <= 6 ? 44 : count <= 7 ? 40 : count <= 8 ? 37 : count <= 9 ? 34 : 31;
+  // PHOTO_VH: viewport-height units for the photo area, decreasing with count
+  // so more cards fit without excessive overlap.
+  const PHOTO_VH_BY_COUNT = { 5: 48, 6: 44, 7: 40, 8: 37, 9: 34, 10: 31 };
+  const PHOTO_VH  = PHOTO_VH_BY_COUNT[count] || 31;
   const BORDER_VH = Math.max(1.2, PHOTO_VH * 0.05); // ~5% border, minimum 1.2vh
-  const FOOTER_VH = BORDER_VH * 4.0;                // thick bottom strip (4× side border)
+  const FOOTER_VH = BORDER_VH * 4.0;                // thick bottom strip (4x side border)
   const CARD_W_VH = PHOTO_VH + BORDER_VH * 2;
   const CARD_H_VH = PHOTO_VH + BORDER_VH + FOOTER_VH;
 

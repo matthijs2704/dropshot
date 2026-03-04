@@ -76,8 +76,11 @@ initOverlays(SCREEN_ID);
 let ws       = null;
 let retryTimer = null;
 let cycleStartTimer = null;
-const RECONNECT_BASE = 2500;
+const RECONNECT_BASE   = 2500;
 const RECONNECT_JITTER = 1500;
+const PRELOAD_WAIT_MAX_MS    = 1200;  // max wait for preloads before starting cycle
+const PRELOAD_POLL_MS        = 120;   // interval for checking preload readiness
+const PRELOAD_INITIAL_DELAY  = 80;    // delay before first preload check
 
 function scheduleCycleStart() {
   if (cycleStartTimer) return;
@@ -88,16 +91,16 @@ function scheduleCycleStart() {
     if (!photoRegistry.size) return;
 
     const waitedMs = Date.now() - startedAt;
-    if (getPreloadedCount() > 0 || waitedMs >= 1200) {
+    if (getPreloadedCount() > 0 || waitedMs >= PRELOAD_WAIT_MAX_MS) {
       hideWaiting();
       startCycle();
       return;
     }
 
-    cycleStartTimer = setTimeout(tick, 120);
+    cycleStartTimer = setTimeout(tick, PRELOAD_POLL_MS);
   };
 
-  cycleStartTimer = setTimeout(tick, 80);
+  cycleStartTimer = setTimeout(tick, PRELOAD_INITIAL_DELAY);
 }
 
 function connect() {

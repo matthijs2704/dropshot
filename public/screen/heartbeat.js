@@ -1,5 +1,7 @@
 // Sends screen_heartbeat and hero_claim messages to the server
 
+const HEARTBEAT_INTERVAL_MS = 1800;
+
 let _ws        = null;
 let _screenId  = null;
 let _getState  = null; // function returning { layoutType, focusGroup, visibleIds, lastCycleAt, lastCycleDurationMs }
@@ -18,7 +20,7 @@ export function startHeartbeat(ws, screenId, getState) {
   _getState = getState;
 
   if (_interval) clearInterval(_interval);
-  _interval = setInterval(sendHeartbeat, 1800);
+  _interval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
 }
 
 export function stopHeartbeat() {

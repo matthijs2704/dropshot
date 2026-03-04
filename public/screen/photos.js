@@ -302,14 +302,14 @@ export function pickPhotos(count, cfg, excludeIds = [], hardExcludeOtherScreen =
       }
     }
 
-    const pool2 = candidates.length > 0
+    const bestPool = candidates.length > 0
       ? candidates
       : (fallbacks.length > 0
           ? fallbacks
           : (recentCandidates.length > 0 ? recentCandidates : recentFallbacks));
-    if (!pool2.length) break;
+    if (!bestPool.length) break;
 
-    const chosen = weightedRandom(pool2);
+    const chosen = weightedRandom(bestPool);
     if (!chosen) break;
 
     picked.push(chosen);
@@ -486,9 +486,22 @@ export function pickNewestPhotos(count, cfg, excludeIds = [], options = {}) {
 /**
  * Assign photos to slots based on aspect-ratio compatibility.
  *
- * @param {Object[]} slots  - Template slot definitions
+ * For each slot, scores every remaining candidate by how well its aspect
+ * ratio fits the slot type, then picks the best match:
+ *
+ *  - Portrait slots: scored by closeness to PORTRAIT_SLOT_TARGET_RATIO
+ *    (≈3:4), with a bonus for actually-portrait photos.
+ *  - Hero slots: wider landscape photos score higher; portrait photos
+ *    receive a penalty multiplier (HERO_LANDSCAPE_PENALTY).
+ *  - Normal slots: scored by closeness to NORMAL_SLOT_TARGET_RATIO (≈4:3).
+ *
+ * Photos are consumed greedily — once assigned to a slot they are removed
+ * from the candidate list.  Returns one photo per slot (or null when no
+ * suitable candidate remains).
+ *
+ * @param {Object[]} slots  - Template slot definitions ({portrait?, hero?})
  * @param {Object[]} photos - Candidate photos
- * @returns {Object[]}      - Photos in slot order (same length as slots)
+ * @returns {(Object|null)[]} - Photos in slot order (same length as slots)
  */
 export function arrangePhotosForSlots(slots, photos) {
   const remaining = [...photos];

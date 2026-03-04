@@ -26,6 +26,27 @@ const PAGE_EXIT_MS  = 380;
  *   5 → [3,2]
  *   6 → [3,3]
  */
+/**
+ * Compute card dimensions for the submission wall grid.
+ *
+ * Derives pixel values from the current viewport so cards always fit without
+ * scrolling while retaining natural polaroid proportions.  Cards are arranged
+ * in rows of at most 3:
+ *
+ *   1 → [1]   (hero — single centred card)
+ *   2 → [2]
+ *   3 → [3]
+ *   4 → [2,2]
+ *   5 → [3,2]
+ *   6 → [3,3]
+ *
+ * When the computed grid exceeds the usable viewport height the entire card
+ * size is scaled down uniformly so everything still fits.
+ *
+ * @param {number} n            - number of cards on this page (1–6)
+ * @param {number} bottomInset  - pixels reserved at the bottom (e.g. info bar)
+ * @returns {{ cols, rows, pad, gap, cardW, cardH, border, photoSize, footerH, msgSize, metaSize, quoteSize }}
+ */
 function _sizing(n, bottomInset) {
   const vw = window.innerWidth  || 1920;
   const vh = window.innerHeight || 1080;

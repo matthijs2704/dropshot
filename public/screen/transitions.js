@@ -160,12 +160,12 @@ export function startKenBurns(img, durationMs) {
     [[1.05, 45, 45],  [1.00, 55, 55]],  // zoom out, drift bottom-right
     [[1.00, 55, 55],  [1.05, 45, 45]],  // zoom in from bottom-right
   ];
-  const [[fs, fox, foy], [ts, tox, toy]] = presets[Math.floor(Math.random() * presets.length)];
+  const [[fromScale, fromOriginX, fromOriginY], [toScale, toOriginX, toOriginY]] = presets[Math.floor(Math.random() * presets.length)];
 
   // Set start state with no transition so it takes effect immediately
   img.style.transition      = 'none';
-  img.style.transformOrigin = `${fox}% ${foy}%`;
-  img.style.transform       = `scale(${fs})`;
+  img.style.transformOrigin = `${fromOriginX}% ${fromOriginY}%`;
+  img.style.transform       = `scale(${fromScale})`;
 
   // Defer the animated state by one rAF to guarantee the start state is
   // committed to the compositor before the transition begins — this eliminates
@@ -173,7 +173,7 @@ export function startKenBurns(img, durationMs) {
   // in the same frame.
   requestAnimationFrame(() => {
     img.style.transition      = `transform ${dur}ms linear, transform-origin 0ms`;
-    img.style.transformOrigin = `${tox}% ${toy}%`;
-    img.style.transform       = `scale(${ts})`;
+    img.style.transformOrigin = `${toOriginX}% ${toOriginY}%`;
+    img.style.transform       = `scale(${toScale})`;
   });
 }

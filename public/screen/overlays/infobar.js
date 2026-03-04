@@ -34,8 +34,12 @@ let _tickerInner  = null;
 let _clockTimer      = null;
 let _countdownTimer  = null;
 
-// Last-rendered event slot state — used to detect meaningful changes for fade transition
-let _eventSlotLast = { name: null, timeVisible: null, visible: null, kind: null, name2: null, visible2: null };
+/**
+ * Snapshot of the last-rendered event slot state.
+ * Compared on each refresh to detect meaningful changes that require a fade transition,
+ * vs. simple countdown ticks that update in-place without animation.
+ */
+let _prevEventSnapshot = { name: null, timeVisible: null, visible: null, kind: null, name2: null, visible2: null };
 
 let _cfg      = {};
 let _schedule = [];   // sorted upcoming events from server
@@ -76,14 +80,24 @@ function _stopClock() {
 // Event / countdown slot
 // ---------------------------------------------------------------------------
 
-// Resolve what to show in the event slot(s).
-// Returns { primary, secondary } where secondary is only set when there is no ticker
-// and both a current event and a next-event-in-countdown-window exist simultaneously.
-//
-// Priority for primary:
-//   explicit alert → next event inside its cfm window → current event → next event (cfm=0)
-// When primary is a current event and a next event is also in its cfm window,
-// secondary gets the next event (shown only when no ticker).
+/**
+ * Determine what to display in the event slot(s) of the info bar.
+ *
+ * Returns `{ primary, secondary }` where each is either a slot descriptor
+ * `{ name, loc, remaining, targetMs, kind }` or `null`.
+ *
+ * Resolution priority for the primary slot:
+ *   1. Explicit alert (set via `setInfoBarAlert`)
+ *   2. Next upcoming event whose countdown window (countdownFromMinutes) is active
+ *   3. Currently-running event (started but not ended)
+ *   4. Soonest future event with countdownFromMinutes = 0 (always-visible)
+ *
+ * The secondary slot is populated only when there is no ticker and both a
+ * current event and a next-event-in-countdown-window coexist — allowing the
+ * bar to show both simultaneously.
+ *
+ * @returns {{ primary: Object|null, secondary: Object|null }}
+ */
 function _resolveEventSlots() {
   if (_alert) {
     const target = Number(new Date(_alert.countdownTo || ''));
@@ -198,6 +212,20 @@ function _applySlotToEl(slot, containerEl, labelEl, nameEl, locEl, timeEl) {
   }
 }
 
+/**
+ * Re-render the event slot(s) in the info bar.
+ *
+ * Calls `_resolveEventSlots()` to determine the current primary and secondary
+ * slot content, then compares each against the previous snapshot
+ * (`_prevEventSnapshot`) to decide how to update the DOM:
+ *
+ *  - If only the countdown number changed → update the text in place (no animation).
+ *  - If the event name, visibility, or kind changed → crossfade: fade out the old
+ *    content over EVENT_FADE_MS, swap in the new content, then fade back in.
+ *  - If the slot was previously hidden → appear with a quick opacity ramp (no fade-out).
+ *
+ * After updating both slots the divider strip is rebuilt via `_updateDividers()`.
+ */
 function _refreshEventSlot() {
   if (!_eventEl) return;
   const showCurrent = _cfg.infoBarShowCurrentEvent !== false;
@@ -217,10 +245,10 @@ function _refreshEventSlot() {
   const newVisible     = primary !== null;
   const newKind        = primary ? primary.kind : null;
 
-  const primaryChanged = newVisible     !== _eventSlotLast.visible
-                      || newName        !== _eventSlotLast.name
-                      || newTimeVisible !== _eventSlotLast.timeVisible
-                      || newKind        !== _eventSlotLast.kind;
+  const primaryChanged = newVisible     !== _prevEventSnapshot.visible
+                      || newName        !== _prevEventSnapshot.name
+                      || newTimeVisible !== _prevEventSnapshot.timeVisible
+                      || newKind        !== _prevEventSnapshot.kind;
 
   if (!primaryChanged) {
     // Only the countdown number ticked — update in place without fading
@@ -228,7 +256,7 @@ function _refreshEventSlot() {
       _eventTimeEl.textContent = fmtDuration(primary.remaining);
     }
   } else {
-    _eventSlotLast = { ...(_eventSlotLast), name: newName, timeVisible: newTimeVisible, visible: newVisible, kind: newKind };
+    _prevEventSnapshot = { ...(_prevEventSnapshot), name: newName, timeVisible: newTimeVisible, visible: newVisible, kind: newKind };
 
     if (_eventEl.style.display === 'none' || _eventEl.style.opacity === '0') {
       _applySlotToEl(primary, _eventEl, _eventLabelEl, _eventNameEl, _eventLocEl, _eventTimeEl);
@@ -248,8 +276,8 @@ function _refreshEventSlot() {
     const newVisible2 = secondary !== null;
     const newName2    = secondary ? secondary.name : null;
 
-    const secondaryChanged = newVisible2 !== _eventSlotLast.visible2
-                          || newName2    !== _eventSlotLast.name2;
+    const secondaryChanged = newVisible2 !== _prevEventSnapshot.visible2
+                          || newName2    !== _prevEventSnapshot.name2;
 
     if (!secondaryChanged) {
       // Only countdown ticked — update in place
@@ -260,7 +288,7 @@ function _refreshEventSlot() {
         }
       }
     } else {
-      _eventSlotLast = { ...(_eventSlotLast), name2: newName2, visible2: newVisible2 };
+      _prevEventSnapshot = { ...(_prevEventSnapshot), name2: newName2, visible2: newVisible2 };
 
       if (_event2El.style.display === 'none' || _event2El.style.opacity === '0') {
         _applySlotToEl(secondary, _event2El, _event2LabelEl, _event2NameEl, _event2LocEl, _event2TimeEl);
@@ -476,7 +504,7 @@ export function mountInfoBar(cfg, schedule) {
     if (h > 0) document.documentElement.style.setProperty('--infobar-height', `${h}px`);
   });
 
-  _eventSlotLast = { name: null, timeVisible: null, visible: null, kind: null, name2: null, visible2: null };
+  _prevEventSnapshot = { name: null, timeVisible: null, visible: null, kind: null, name2: null, visible2: null };
 
   if (_cfg.infoBarShowClock !== false) _startClock();
   const showAnyEvent = _cfg.infoBarShowCurrentEvent !== false || _cfg.infoBarShowNextEvent !== false;
@@ -503,7 +531,7 @@ export function removeInfoBar() {
   _tickerEl = _tickerInner = null;
   _alert = null;
   _tickerMessages = [];
-  _eventSlotLast = { name: null, timeVisible: null, visible: null, kind: null, name2: null, visible2: null };
+  _prevEventSnapshot = { name: null, timeVisible: null, visible: null, kind: null, name2: null, visible2: null };
 }
 
 /**

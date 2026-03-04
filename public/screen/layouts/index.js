@@ -224,13 +224,7 @@ async function runCycle() {
 
   // --- Fullscreen ---
   if (!built && layoutType === 'fullscreen') {
-    const hero  = pickHeroPhoto(cfg, _heroLocks, _screenId, { orientation: 'landscape' });
-    const photo = hero || pickPhotos(1, cfg, [], true, { orientation: 'landscape' })[0] || null;
-
-    if (photo) {
-      _claimHero(photo.id, cfg.crossScreenHeroLockSec || DEFAULT_HERO_LOCK_SEC);
-      markAsHeroShown(photo.id);
-    }
+    const photo = _pickAndClaimHero(cfg, { orientation: 'landscape' });
 
     built = buildFullscreen(photo);
     displayState.layoutType = 'fullscreen';
@@ -251,12 +245,7 @@ async function runCycle() {
 
   // --- Featured duo ---
   else if (!built && layoutType === 'featuredduo') {
-    const hero   = pickHeroPhoto(cfg, _heroLocks, _screenId, { orientation: 'landscape' });
-    const heroP  = hero || pickPhotos(1, cfg, [], true, { orientation: 'landscape' })[0] || null;
-    if (heroP) {
-      _claimHero(heroP.id, cfg.crossScreenHeroLockSec || DEFAULT_HERO_LOCK_SEC);
-      markAsHeroShown(heroP.id);
-    }
+    const heroP = _pickAndClaimHero(cfg, { orientation: 'landscape' });
     const support = pickPhotos(1, cfg, heroP ? [heroP.id] : [], true, {
       orientation: 'portrait',
       enforceOrientation: false,
@@ -291,11 +280,7 @@ async function runCycle() {
       const heroOptions = heroSlot?.portrait
         ? { orientation: 'portrait', enforceOrientation: false, orientationBoost: 1.25 }
         : { orientation: 'landscape' };
-      heroPhoto = pickHeroPhoto(cfg, _heroLocks, _screenId, heroOptions);
-      if (heroPhoto) {
-        _claimHero(heroPhoto.id, cfg.crossScreenHeroLockSec || DEFAULT_HERO_LOCK_SEC);
-        markAsHeroShown(heroPhoto.id);
-      }
+      heroPhoto = _pickAndClaimHero(cfg, heroOptions, false);
     }
 
     const totalSlots = tplDef ? tplDef.slots.filter(s => !s.recent).length : 6;
@@ -360,4 +345,27 @@ async function runCycle() {
 
 function _claimHero(photoId, ttlSec) {
   if (_ws) claimHero(_ws, _screenId, photoId, ttlSec);
+}
+
+/**
+ * Pick a hero photo, claim the cross-screen lock, and mark it as hero-shown.
+ * Falls back to pickPhotos when no hero candidate passes the cooldown check.
+ *
+ * @param {Object}  cfg
+ * @param {Object}  [options]        - orientation options forwarded to pickHeroPhoto
+ * @param {boolean} [useFallback=true] - try pickPhotos if pickHeroPhoto returns null
+ * @returns {Object|null} the chosen photo, or null if pool is empty
+ */
+function _pickAndClaimHero(cfg, options = {}, useFallback = true) {
+  const hero = pickHeroPhoto(cfg, _heroLocks, _screenId, options);
+  const photo = hero || (useFallback
+    ? pickPhotos(1, cfg, [], true, options)[0] || null
+    : null);
+
+  if (photo) {
+    _claimHero(photo.id, cfg.crossScreenHeroLockSec || DEFAULT_HERO_LOCK_SEC);
+    markAsHeroShown(photo.id);
+  }
+
+  return photo;
 }

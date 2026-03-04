@@ -12,7 +12,7 @@
  *   minimal       — near-black, left-aligned, subtle accent dot
  */
 
-import { el } from '../../shared/utils.js';
+import { el, slideDurationMs, slideDelay } from '../../shared/utils.js';
 
 const PRESET_CLASS = {
   'dark-center': 'tc-dark-center',
@@ -57,10 +57,10 @@ export function buildTextCardSlide(slide) {
 
   wrap.appendChild(inner);
 
-  const durationMs = (slide.durationSec || 10) * 1000;
+  const durationMs = slideDurationMs(slide, 10);
 
   return {
     el:   wrap,
-    play: () => new Promise(resolve => setTimeout(resolve, durationMs)),
+    play: () => slideDelay(durationMs),
   };
 }

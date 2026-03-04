@@ -11,7 +11,7 @@
  * All colours/fonts honour CSS custom property overrides (theme system).
  */
 
-import { el } from '../../shared/utils.js';
+import { el, slideDurationMs, slideDelay } from '../../shared/utils.js';
 
 /**
  * @param {object} slide
@@ -54,10 +54,10 @@ export async function buildQrSlide(slide) {
 
   wrap.appendChild(stack);
 
-  const durationMs = (slide.durationSec || 10) * 1000;
+  const durationMs = slideDurationMs(slide, 10);
 
   return {
     el:   wrap,
-    play: () => new Promise(resolve => setTimeout(resolve, durationMs)),
+    play: () => slideDelay(durationMs),
   };
 }

@@ -15,7 +15,7 @@
  * All colours/fonts honour CSS custom property overrides (theme system).
  */
 
-import { el, photoUrl } from '../../shared/utils.js';
+import { el, photoUrl, slideDurationMs, slideDelay } from '../../shared/utils.js';
 
 // ---------------------------------------------------------------------------
 // Layout builders
@@ -108,10 +108,10 @@ export async function buildArticleSlide(slide) {
   else if (layout === 'image-bg') rootEl = _buildImageBg(img, textBlock);
   else                            rootEl = _buildImageLeft(img, textBlock);  // default
 
-  const durationMs = (slide.durationSec || 12) * 1000;
+  const durationMs = slideDurationMs(slide, 12);
 
   return {
     el:   rootEl,
-    play: () => new Promise(resolve => setTimeout(resolve, durationMs)),
+    play: () => slideDelay(durationMs),
   };
 }

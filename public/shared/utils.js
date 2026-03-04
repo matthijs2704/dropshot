@@ -122,7 +122,7 @@ export function fmtDuration(ms) {
 }
 
 /**
- * Return the best display URL for a photo object.
+ * Return a photo's best display URL.
  * @param {{ displayUrl?: string, url?: string }} photo
  * @returns {string}
  */
@@ -137,6 +137,25 @@ export function photoUrl(photo) {
  */
 export function photoThumbUrl(photo) {
   return photo.thumbUrl || photo.displayUrl || photo.url || '';
+}
+
+/**
+ * Return the slide display duration in milliseconds.
+ * @param {{ durationSec?: number }} slide
+ * @param {number} defaultSec
+ * @returns {number}
+ */
+export function slideDurationMs(slide, defaultSec) {
+  return (slide.durationSec || defaultSec) * 1000;
+}
+
+/**
+ * Return a Promise that resolves after ms milliseconds — for use as slide play().
+ * @param {number} ms
+ * @returns {Promise<void>}
+ */
+export function slideDelay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**

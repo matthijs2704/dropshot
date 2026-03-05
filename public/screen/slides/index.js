@@ -9,6 +9,7 @@ import { buildImageSlide }    from './image.js';
 import { buildArticleSlide }  from './article.js';
 import { runTransition }      from '../transitions.js';
 import { getScreenCfg }       from '../../shared/utils.js';
+import { sendSlideReady, sendSlideEnded } from '../ws-send.js';
 
 // ---------------------------------------------------------------------------
 // State
@@ -18,7 +19,6 @@ let _slides     = [];     // full slide library (from server)
 let _playlists  = [];     // full playlist library (from server)
 let _screenId   = null;
 let _config     = null;   // current screen config slice
-let _ws         = null;
 let _container  = null;
 
 // Per-screen playlist pointer
@@ -37,10 +37,6 @@ const _advanceWaiters = new Map();
 export function initSlides(container, screenId) {
   _container = container;
   _screenId  = screenId;
-}
-
-export function updateSlidesWs(ws) {
-  _ws = ws;
 }
 
 export function updateSlidesConfig(config) {
@@ -163,26 +159,13 @@ export async function runNextSlide(currentDisplayEl) {
 
   // Notify server — coordinated playlists use slide_ready and wait for
   // slide_advance; non-coordinated use the legacy slide_ended.
-  if (_ws && _ws.readyState === 1) {
-    const activePl = _getActivePlaylist();
-    try {
-      if (activePl?.coordinated) {
-        _ws.send(JSON.stringify({
-          type: 'slide_ready',
-          slideId: slide.id,
-          playlistId: activePl.id,
-          screenId: _screenId,
-        }));
-        // Wait for server to say "go" before returning control to the cycle
-        await _waitForAdvance(activePl.id);
-      } else {
-        _ws.send(JSON.stringify({
-          type: 'slide_ended',
-          slideId: slide.id,
-          screenId: _screenId,
-        }));
-      }
-    } catch {}
+  const activePl = _getActivePlaylist();
+  if (activePl?.coordinated) {
+    sendSlideReady(slide.id, activePl.id);
+    // Wait for server to say "go" before returning control to the cycle
+    await _waitForAdvance(activePl.id);
+  } else {
+    sendSlideEnded(slide.id);
   }
 
   return true;

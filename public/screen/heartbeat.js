@@ -1,8 +1,9 @@
-// Sends screen_heartbeat and hero_claim messages to the server
+// Sends screen_heartbeat messages to the server at a fixed interval.
+
+import { sendHeartbeat } from './ws-send.js';
 
 const HEARTBEAT_INTERVAL_MS = 1800;
 
-let _ws        = null;
 let _screenId  = null;
 let _getState  = null; // function returning { layoutType, focusGroup, visibleIds, lastCycleAt, lastCycleDurationMs }
 let _interval  = null;
@@ -10,17 +11,15 @@ let _interval  = null;
 /**
  * Start sending heartbeats.
  *
- * @param {WebSocket} ws
  * @param {string} screenId
  * @param {Function} getState - callback returning current display state
  */
-export function startHeartbeat(ws, screenId, getState) {
-  _ws       = ws;
+export function startHeartbeat(screenId, getState) {
   _screenId = screenId;
   _getState = getState;
 
   if (_interval) clearInterval(_interval);
-  _interval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+  _interval = setInterval(_tick, HEARTBEAT_INTERVAL_MS);
 }
 
 export function stopHeartbeat() {
@@ -28,42 +27,7 @@ export function stopHeartbeat() {
   _interval = null;
 }
 
-export function updateWs(ws) {
-  _ws = ws;
-}
-
-function sendHeartbeat() {
-  if (!_ws || _ws.readyState !== 1) return;
+function _tick() {
   const state = _getState ? _getState() : {};
-  try {
-    _ws.send(JSON.stringify({
-      type:               'screen_heartbeat',
-      screenId:           _screenId,
-      layoutType:         state.layoutType         || null,
-      focusGroup:         state.focusGroup         || null,
-      visibleIds:         state.visibleIds         || [],
-      lastCycleAt:        state.lastCycleAt        || 0,
-      lastCycleDurationMs: state.lastCycleDurationMs || null,
-    }));
-  } catch {}
-}
-
-/**
- * Send a hero_claim message to lock a photo as hero on this screen.
- *
- * @param {WebSocket} ws
- * @param {string} screenId
- * @param {string} photoId
- * @param {number} ttlSec
- */
-export function claimHero(ws, screenId, photoId, ttlSec) {
-  if (!ws || ws.readyState !== 1) return;
-  try {
-    ws.send(JSON.stringify({
-      type:     'hero_claim',
-      screenId,
-      photoId,
-      ttlSec,
-    }));
-  } catch {}
+  sendHeartbeat(state);
 }

@@ -20,13 +20,12 @@ import {
   updateSubmissionWallSettings,
   getSubmissionWallOptions,
 } from '../submissions.js';
-import { claimHero } from '../heartbeat.js';
+import { sendHeroClaim } from '../ws-send.js';
 import {
   initSlides,
   runNextSlide,
   getInterleaveEvery,
   hasPlaySoon,
-  updateSlidesWs,
   updateSlidesConfig,
 } from '../slides/index.js';
 import { getBottomInset } from '../overlays/index.js';
@@ -58,7 +57,6 @@ let _config          = null;
 let _globalConfig    = null;
 let _heroLocks       = new Map();
 let _screenId        = null;
-let _ws              = null;
 let _recentTemplates = [];
 let _cycleTimer      = null;
 let _running         = false;
@@ -84,11 +82,6 @@ export function updateConfig(config) {
 
 export function updateHeroLocks(locks) {
   _heroLocks = new Map(locks.map(l => [l.photoId, l]));
-}
-
-export function updateWs(ws) {
-  _ws = ws;
-  updateSlidesWs(ws);
 }
 
 /**
@@ -362,7 +355,7 @@ async function runCycle() {
 }
 
 function _claimHero(photoId, ttlSec) {
-  if (_ws) claimHero(_ws, _screenId, photoId, ttlSec);
+  sendHeroClaim(photoId, ttlSec);
 }
 
 /**

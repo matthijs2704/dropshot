@@ -15,10 +15,10 @@ import {
   stopCycle,
   updateConfig,
   updateHeroLocks,
-  updateWs,
   displayState,
 } from './layouts/index.js';
-import { startHeartbeat, stopHeartbeat, updateWs as updateHbWs } from './heartbeat.js';
+import { startHeartbeat, stopHeartbeat } from './heartbeat.js';
+import { setWs, clearWs, sendSyncPhotos } from './ws-send.js';
 import { updateSlides, updatePlaylists, triggerPlaySoon, handleSlideAdvance } from './slides/index.js';
 import {
   initOverlays,
@@ -110,9 +110,8 @@ function connect() {
 
   ws.onopen = () => {
     clearTimeout(retryTimer);
-    updateWs(ws);
-    updateHbWs(ws);
-    startHeartbeat(ws, SCREEN_ID, () => displayState);
+    setWs(ws, SCREEN_ID);
+    startHeartbeat(SCREEN_ID, () => displayState);
   };
 
   ws.onmessage = e => {
@@ -124,6 +123,7 @@ function connect() {
   ws.onerror = () => {};  // 'close' always follows an error; handle there
 
   ws.onclose = () => {
+    clearWs();
     stopHeartbeat();
     stopCycle();
     removeAllOverlays();
@@ -164,7 +164,7 @@ async function handleMessage(msg) {
         const knownIds = Array.from(photoRegistry.keys());
         const totalPhotos = Number(msg.totalPhotos || 0);
         if (totalPhotos > 0 || knownIds.length > 0) showSyncStatus(0, totalPhotos);
-        try { ws.send(JSON.stringify({ type: 'sync_photos', knownIds })); } catch {}
+        sendSyncPhotos(knownIds);
       }
       break;
 

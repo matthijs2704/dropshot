@@ -1,10 +1,73 @@
 // Mosaic layout: grid of slots defined by a template, with live tile swaps
 
-import { TEMPLATE_DEFS } from '../templates.js';
+import { TEMPLATE_DEFS, pickTemplate } from '../templates.js';
 import { applySmartFit }  from '../fit.js';
 import { crossFadeSlot, startKenBurns }  from '../transitions.js';
-import { pickPhotos, pickNewestPhotos, arrangePhotosForSlots } from '../photos.js';
+import { pickNewestPhotos, arrangePhotosForSlots } from '../photos.js';
 import { shuffle, photoUrl, photoThumbUrl, el } from '../../shared/utils.js';
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+
+let _recentTemplates = [];
+
+// ---------------------------------------------------------------------------
+// Descriptor
+// ---------------------------------------------------------------------------
+
+/** Layout descriptor for the dispatcher. */
+export const layout = {
+  name: 'mosaic',
+  minPhotos: 4,
+
+  pick(cfg, helpers) {
+    const heroSide = cfg.preferHeroSide || 'auto';
+    const tplName  = pickTemplate(cfg, _recentTemplates, heroSide);
+    _recentTemplates = [..._recentTemplates.slice(-3), tplName];
+
+    const tplDef     = TEMPLATE_DEFS[tplName];
+    const tplHasHero = tplDef ? tplDef.slots.some(s => s.hero) : false;
+
+    let heroPhoto = null;
+    if (tplHasHero) {
+      const heroSlot = tplDef.slots.find(s => s.hero) || null;
+      const heroOptions = heroSlot?.portrait
+        ? { orientation: 'portrait', enforceOrientation: false, orientationBoost: 1.25 }
+        : { orientation: 'landscape' };
+      heroPhoto = helpers.pickAndClaimHero(cfg, heroOptions, false);
+    }
+
+    const totalSlots = tplDef ? tplDef.slots.filter(s => !s.recent).length : 6;
+    const slotCount  = totalSlots - (heroPhoto ? 1 : 0);
+    const others     = helpers.pickPhotos(Math.max(slotCount, 3), cfg, heroPhoto ? [heroPhoto.id] : []);
+
+    return { tplName, heroPhoto, others };
+  },
+
+  build(picked, cfg) {
+    return buildMosaic(picked.tplName, picked.heroPhoto, picked.others, cfg.minTilePx || 170, cfg);
+  },
+
+  /**
+   * Run tile swaps after mount.  Called by the dispatcher when slotEls are
+   * present.
+   *
+   * @param {Object} ctx
+   * @param {HTMLElement[]} ctx.slotEls
+   * @param {Object}        ctx.cfg
+   * @param {number}        ctx.cycleStart
+   * @param {string[]}      ctx.visibleIds
+   * @param {Function}      ctx.pickMorePhotos - (count, options) => Object[]
+   * @returns {Promise<string[]|null>} new visible IDs (or null)
+   */
+  async postMount(ctx) {
+    const newIds = await runMosaicTransitions(
+      ctx.slotEls, ctx.cfg, ctx.cycleStart, ctx.pickMorePhotos,
+    );
+    return newIds;
+  },
+};
 
 function _parseGridArea(area) {
   const parts = String(area || '').split('/').map(s => Number(s.trim()));

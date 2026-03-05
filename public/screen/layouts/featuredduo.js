@@ -6,6 +6,28 @@ import { applySmartFit }  from '../fit.js';
 import { startKenBurns }  from '../transitions.js';
 import { el, photoUrl }   from '../../shared/utils.js';
 
+/** Layout descriptor for the dispatcher. */
+export const layout = {
+  name: 'featuredduo',
+  minPhotos: 2,
+
+  pick(cfg, helpers) {
+    const heroP = helpers.pickAndClaimHero(cfg, { orientation: 'landscape' });
+    const support = helpers.pickPhotos(1, cfg, heroP ? [heroP.id] : [], true, {
+      orientation: 'portrait',
+      enforceOrientation: false,
+      orientationBoost: 1.25,
+      avoidRecentMs: 120_000,
+      allowRecentFallback: true,
+    });
+    return { photos: [heroP, support[0] || null].filter(Boolean) };
+  },
+
+  build(picked) {
+    return buildFeaturedDuo(picked.photos);
+  },
+};
+
 /**
  * @param {Object[]} photos - Expects at least 2 photos; [0] = hero, [1] = support
  * @returns {{ el, visibleIds, startMotion }}

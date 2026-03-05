@@ -4,6 +4,27 @@ import { applySmartFit }  from '../fit.js';
 import { startKenBurns }  from '../transitions.js';
 import { el, photoUrl }   from '../../shared/utils.js';
 
+/** Layout descriptor for the dispatcher. */
+export const layout = {
+  name: 'sidebyside',
+  minPhotos: 2,
+
+  pick(cfg, helpers) {
+    const photos = helpers.pickPhotos(2, cfg, [], true, {
+      orientation: 'portrait',
+      enforceOrientation: false,
+      orientationBoost: 1.25,
+      avoidRecentMs: 120_000,
+      allowRecentFallback: true,
+    });
+    return { photos };
+  },
+
+  build(picked) {
+    return buildSideBySide(picked.photos);
+  },
+};
+
 /**
  * Build a side-by-side layout element.
  *

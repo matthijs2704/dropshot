@@ -4,6 +4,21 @@ import { applySmartFit }       from '../fit.js';
 import { startKenBurns }       from '../transitions.js';
 import { el, photoUrl }        from '../../shared/utils.js';
 
+/** Layout descriptor for the dispatcher. */
+export const layout = {
+  name: 'fullscreen',
+  minPhotos: 1,
+
+  pick(cfg, helpers) {
+    const photo = helpers.pickAndClaimHero(cfg, { orientation: 'landscape' });
+    return { photo };
+  },
+
+  build(picked) {
+    return buildFullscreen(picked.photo);
+  },
+};
+
 /**
  * Build a fullscreen layout element.
  *

@@ -1,13 +1,8 @@
-// Layout cycle dispatcher: picks layout type, builds DOM, runs transitions
+// Layout cycle dispatcher: loads layout descriptors, picks layout type,
+// builds DOM, runs transitions.
 
-import { buildFullscreen }  from './fullscreen.js';
-import { buildSideBySide }  from './sidebyside.js';
-import { buildFeaturedDuo } from './featuredduo.js';
-import { buildPolaroid }    from './polaroid.js';
-import { buildMosaic, runMosaicTransitions } from './mosaic.js';
 import { buildSubmissionWall } from './submissionwall.js';
 import { runTransition }    from '../transitions.js';
-import { pickTemplate, TEMPLATE_DEFS } from '../templates.js';
 import {
   pickPhotos,
   pickHeroPhoto,
@@ -39,8 +34,16 @@ const POST_SLIDE_DELAY_MS   = 500;    // pause after slide before next photo cyc
 const NO_CONFIG_RETRY_MS    = 1000;   // retry interval when config not yet available
 const DEFAULT_LAYOUT_DUR_MS = 8000;   // fallback layout duration
 const DEFAULT_HERO_LOCK_SEC = 30;     // cross-screen hero lock TTL
-const POLAROID_MIN_COUNT    = 5;
-const POLAROID_MAX_COUNT    = 10;
+
+// Layout module paths, keyed by layout name.
+// Dynamic import() loads each on first use; broken files are skipped.
+const _LAYOUT_PATHS = {
+  fullscreen:  './fullscreen.js',
+  sidebyside:  './sidebyside.js',
+  featuredduo: './featuredduo.js',
+  polaroid:    './polaroid.js',
+  mosaic:      './mosaic.js',
+};
 
 // Display state shared with heartbeat
 export const displayState = {
@@ -57,12 +60,63 @@ let _config          = null;
 let _globalConfig    = null;
 let _heroLocks       = new Map();
 let _screenId        = null;
-let _recentTemplates = [];
 let _cycleTimer      = null;
 let _running         = false;
 let _destroyCurrent  = null;    // cleanup fn from current layout (e.g. submission wall paging)
-let _photoCycleCount = 0;   // counts photo layouts since last slide interleave
+let _photoCycleCount = 0;       // counts photo layouts since last slide interleave
 let _lastSubmissionWallAt = Date.now();
+
+/** @type {Map<string, Object>} name → layout descriptor (populated by _loadLayouts) */
+let _layouts = new Map();
+
+// ---------------------------------------------------------------------------
+// Layout loading
+// ---------------------------------------------------------------------------
+
+/**
+ * Dynamically import all layout modules.  Each module must export a `layout`
+ * descriptor with { name, minPhotos, pick, build, postMount? }.
+ *
+ * Broken or missing layout files are skipped with a warning — they won't
+ * crash the cycle.
+ */
+async function _loadLayouts() {
+  const entries = Object.entries(_LAYOUT_PATHS);
+  const results = await Promise.allSettled(
+    entries.map(([, path]) => import(path)),
+  );
+
+  for (let i = 0; i < entries.length; i++) {
+    const [name] = entries[i];
+    const result = results[i];
+    if (result.status === 'fulfilled' && result.value?.layout) {
+      _layouts.set(name, result.value.layout);
+    } else {
+      const reason = result.status === 'rejected' ? result.reason?.message : 'no layout export';
+      console.warn(`[layouts] skipping ${name}: ${reason}`);
+    }
+  }
+}
+
+// Kick off layout loading immediately (top-level await not used so the
+// module evaluates synchronously; _loadLayouts resolves before the first
+// runCycle fires because initCycle + config must arrive first).
+const _layoutsReady = _loadLayouts();
+
+// ---------------------------------------------------------------------------
+// Helpers object passed to layout.pick()
+// ---------------------------------------------------------------------------
+
+function _buildHelpers() {
+  return {
+    pickPhotos,
+    pickAndClaimHero: _pickAndClaimHero,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Init / config
+// ---------------------------------------------------------------------------
 
 /**
  * Initialise the cycle engine.
@@ -109,7 +163,7 @@ export function stopCycle() {
  * Count ready photos in the current pool (respects group filtering).
  * Used to downgrade layouts when the pool is too small.
  */
-function readyPoolSize(cfg) {
+function _readyPoolSize(cfg) {
   const groupMode   = cfg.groupMode  || 'auto';
   const activeGroup = cfg.activeGroup || 'ungrouped';
   const all = Array.from(photoRegistry.values()).filter(p => p.status === 'ready');
@@ -118,72 +172,8 @@ function readyPoolSize(cfg) {
 }
 
 // ---------------------------------------------------------------------------
-// Layout builders — each returns { built, layoutType, duration?, slotEls? }
+// Submission wall (separate code path — not a photo layout)
 // ---------------------------------------------------------------------------
-
-const _layoutBuilders = {
-  fullscreen(cfg) {
-    const photo = _pickAndClaimHero(cfg, { orientation: 'landscape' });
-    return { built: buildFullscreen(photo), layoutType: 'fullscreen' };
-  },
-
-  sidebyside(cfg) {
-    const photos = pickPhotos(2, cfg, [], true, {
-      orientation: 'portrait',
-      enforceOrientation: false,
-      orientationBoost: 1.25,
-      avoidRecentMs: 120_000,
-      allowRecentFallback: true,
-    });
-    return { built: buildSideBySide(photos), layoutType: 'sidebyside' };
-  },
-
-  featuredduo(cfg) {
-    const heroP = _pickAndClaimHero(cfg, { orientation: 'landscape' });
-    const support = pickPhotos(1, cfg, heroP ? [heroP.id] : [], true, {
-      orientation: 'portrait',
-      enforceOrientation: false,
-      orientationBoost: 1.25,
-      avoidRecentMs: 120_000,
-      allowRecentFallback: true,
-    });
-    return {
-      built: buildFeaturedDuo([heroP, support[0] || null].filter(Boolean)),
-      layoutType: 'featuredduo',
-    };
-  },
-
-  polaroid(cfg) {
-    const polaroidCount = POLAROID_MIN_COUNT + Math.floor(Math.random() * (POLAROID_MAX_COUNT - POLAROID_MIN_COUNT + 1));
-    const photos = pickPhotos(Math.min(polaroidCount, POLAROID_MAX_COUNT), cfg, [], false);
-    return { built: buildPolaroid(photos), layoutType: 'polaroid' };
-  },
-
-  mosaic(cfg) {
-    const heroSide = cfg.preferHeroSide || 'auto';
-    const tplName  = pickTemplate(cfg, _recentTemplates, heroSide);
-    _recentTemplates = [..._recentTemplates.slice(-3), tplName];
-
-    const tplDef     = TEMPLATE_DEFS[tplName];
-    const tplHasHero = tplDef ? tplDef.slots.some(s => s.hero) : false;
-
-    let heroPhoto = null;
-    if (tplHasHero) {
-      const heroSlot = tplDef.slots.find(s => s.hero) || null;
-      const heroOptions = heroSlot?.portrait
-        ? { orientation: 'portrait', enforceOrientation: false, orientationBoost: 1.25 }
-        : { orientation: 'landscape' };
-      heroPhoto = _pickAndClaimHero(cfg, heroOptions, false);
-    }
-
-    const totalSlots = tplDef ? tplDef.slots.filter(s => !s.recent).length : 6;
-    const slotCount  = totalSlots - (heroPhoto ? 1 : 0);
-    const others     = pickPhotos(Math.max(slotCount, 3), cfg, heroPhoto ? [heroPhoto.id] : []);
-
-    const built = buildMosaic(tplName, heroPhoto, others, cfg.minTilePx || 170, cfg);
-    return { built, layoutType: tplName, slotEls: built.slotEls };
-  },
-};
 
 /**
  * Build a submission wall layout.  Returns null when the wall should be
@@ -206,10 +196,48 @@ function _buildSubmissionWallLayout(cycleStart, submissionMode, hasSubmissions, 
 }
 
 // ---------------------------------------------------------------------------
+// Layout selection (pool-size aware)
+// ---------------------------------------------------------------------------
+
+/**
+ * Choose which layouts are eligible based on pool size and admin config.
+ * Returns an array of layout names.
+ *
+ * @param {Object} cfg
+ * @param {number} poolSize
+ * @returns {{ candidates: string[], cfg: Object }}
+ */
+function _selectCandidates(cfg, poolSize) {
+  const allNames = Array.from(_layouts.keys());
+
+  // Filter by pool size — only layouts whose minPhotos we can satisfy
+  let eligible = allNames.filter(name => {
+    const desc = _layouts.get(name);
+    return poolSize >= (desc?.minPhotos || 1);
+  });
+
+  // For small pools (4-5), restrict mosaic to uniform templates only
+  if (poolSize <= 5 && eligible.includes('mosaic')) {
+    cfg = { ...cfg, templateEnabled: (cfg.templateEnabled || []).filter(t => t.startsWith('uniform')) };
+    if (!cfg.templateEnabled.length) cfg = { ...cfg, templateEnabled: ['uniform-4', 'uniform-6'] };
+  }
+
+  // Intersect with admin-enabled layouts (but always keep at least fullscreen)
+  const adminEnabled = cfg.enabledLayouts || allNames;
+  let candidates = eligible.filter(l => adminEnabled.includes(l));
+  if (!candidates.length) candidates = ['fullscreen'];
+
+  return { candidates, cfg };
+}
+
+// ---------------------------------------------------------------------------
 // Core cycle
 // ---------------------------------------------------------------------------
 
 async function runCycle() {
+  // Ensure layouts are loaded before first cycle
+  await _layoutsReady;
+
   if (!_running || !_config) {
     _cycleTimer = setTimeout(runCycle, NO_CONFIG_RETRY_MS);
     return;
@@ -250,32 +278,9 @@ async function runCycle() {
   const submissionIntervalMs = Math.max(10, Number(_globalConfig?.submissionDisplayIntervalSec || 45)) * 1000;
   const shouldRunSubmissionWall = submissionsEnabled && ((cycleStart - _lastSubmissionWallAt) >= submissionIntervalMs);
 
-  const poolSize = readyPoolSize(cfg);
-
-  // Choose layout with graceful warm-up based on pool size:
-  //   1 photo     → fullscreen only
-  //   2-3 photos  → fullscreen or sidebyside / featuredduo
-  //   4-5 photos  → add simple mosaics (uniform-4/6)
-  //   6+          → full set including polaroid (needs ≥5, but 6+ gives variety)
-  const ALL_LAYOUTS = ['fullscreen', 'sidebyside', 'featuredduo', 'polaroid', 'mosaic'];
-  let effectiveEnabled;
-  if (poolSize <= 1) {
-    effectiveEnabled = ['fullscreen'];
-  } else if (poolSize <= 3) {
-    effectiveEnabled = ['fullscreen', 'sidebyside', 'featuredduo'];
-  } else if (poolSize <= 5) {
-    effectiveEnabled = ['fullscreen', 'sidebyside', 'featuredduo', 'mosaic'];
-    // Restrict mosaic templates to simple uniform ones for tiny pools
-    cfg = { ...cfg, templateEnabled: (cfg.templateEnabled || []).filter(t => t.startsWith('uniform')) };
-    if (!cfg.templateEnabled.length) cfg = { ...cfg, templateEnabled: ['uniform-4', 'uniform-6'] };
-  } else {
-    effectiveEnabled = (cfg.enabledLayouts || ALL_LAYOUTS).filter(l => ALL_LAYOUTS.includes(l));
-  }
-
-  // Intersect with admin-enabled layouts (but always keep at least fullscreen)
-  const adminEnabled = cfg.enabledLayouts || ALL_LAYOUTS;
-  let candidates = effectiveEnabled.filter(l => adminEnabled.includes(l));
-  if (!candidates.length) candidates = ['fullscreen'];
+  const poolSize = _readyPoolSize(cfg);
+  const { candidates, cfg: adjustedCfg } = _selectCandidates(cfg, poolSize);
+  cfg = adjustedCfg;
 
   let layoutType = candidates[Math.floor(Math.random() * candidates.length)];
   if (shouldRunSubmissionWall) {
@@ -286,18 +291,29 @@ async function runCycle() {
   // Tear down previous layout (e.g. submission wall paging timers)
   if (_destroyCurrent) { _destroyCurrent(); _destroyCurrent = null; }
 
-  let result;
+  let built, resolvedType, slotEls, layoutDesc;
+
   if (layoutType === 'submissionwall') {
-    result = _buildSubmissionWallLayout(cycleStart, submissionMode, hasSubmissions, hideWhenEmpty, wallOptions);
-    if (!result) layoutType = 'fullscreen';  // fall back when wall is empty
-  }
-  if (!result) {
-    const builder = _layoutBuilders[layoutType] || _layoutBuilders.fullscreen;
-    result = builder(cfg);
+    const result = _buildSubmissionWallLayout(cycleStart, submissionMode, hasSubmissions, hideWhenEmpty, wallOptions);
+    if (result) {
+      built        = result.built;
+      resolvedType = result.layoutType;
+      cfg = { ...cfg, _overrideDuration: result.duration };
+    } else {
+      layoutType = 'fullscreen';  // fall back when wall is empty
+    }
   }
 
-  const { built, layoutType: resolvedType, slotEls = null } = result;
-  const duration = result.duration || cfg.layoutDuration || DEFAULT_LAYOUT_DUR_MS;
+  if (!built) {
+    layoutDesc = _layouts.get(layoutType) || _layouts.get('fullscreen');
+    const helpers = _buildHelpers();
+    const picked  = layoutDesc.pick(cfg, helpers);
+    built         = layoutDesc.build(picked, cfg);
+    resolvedType  = built.templateName || layoutDesc.name;
+    slotEls       = built.slotEls || null;
+  }
+
+  const duration = cfg._overrideDuration || cfg.layoutDuration || DEFAULT_LAYOUT_DUR_MS;
 
   displayState.layoutType = resolvedType;
   _destroyCurrent = built.destroy || null;
@@ -328,21 +344,26 @@ async function runCycle() {
   displayState.lastCycleDurationMs = Date.now() - cycleStart;
   displayState.focusGroup          = cfg.groupMode === 'manual' ? cfg.activeGroup : null;
 
-  // Run mosaic tile swaps if applicable
-  if (slotEls) {
-    runMosaicTransitions(slotEls, cfg, cycleStart, (count, options = {}) =>
-      pickPhotos(
-        count,
-        cfg,
-        [...visibleIds, ...(options.excludeIds || [])],
-        false,
-        {
-          orientation: options.orientation || 'any',
-          enforceOrientation: options.enforceOrientation,
-          orientationBoost: options.orientationBoost,
-        },
-      )
-    ).then(newIds => {
+  // Run post-mount logic (e.g. mosaic tile swaps)
+  if (layoutDesc?.postMount && slotEls) {
+    layoutDesc.postMount({
+      slotEls,
+      cfg,
+      cycleStart,
+      visibleIds,
+      pickMorePhotos: (count, options = {}) =>
+        pickPhotos(
+          count,
+          cfg,
+          [...visibleIds, ...(options.excludeIds || [])],
+          false,
+          {
+            orientation: options.orientation || 'any',
+            enforceOrientation: options.enforceOrientation,
+            orientationBoost: options.orientationBoost,
+          },
+        ),
+    }).then(newIds => {
       if (newIds) displayState.visibleIds = [...new Set([...displayState.visibleIds, ...newIds])];
     }).catch(() => {});
   }
@@ -353,6 +374,10 @@ async function runCycle() {
   // Schedule next cycle
   _cycleTimer = setTimeout(runCycle, duration);
 }
+
+// ---------------------------------------------------------------------------
+// Hero picking helpers
+// ---------------------------------------------------------------------------
 
 function _claimHero(photoId, ttlSec) {
   sendHeroClaim(photoId, ttlSec);

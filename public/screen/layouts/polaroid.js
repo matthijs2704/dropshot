@@ -4,6 +4,26 @@ import { el, photoThumbUrl } from '../../shared/utils.js';
 // on a dark background. Cards are scattered across the whole screen including
 // the centre, overlapping naturally like photos tossed on a table.
 
+const POLAROID_MIN_COUNT = 5;
+const POLAROID_MAX_COUNT = 10;
+
+/** Layout descriptor for the dispatcher. */
+export const layout = {
+  name: 'polaroid',
+  minPhotos: 5,
+
+  pick(cfg, helpers) {
+    const count = POLAROID_MIN_COUNT
+      + Math.floor(Math.random() * (POLAROID_MAX_COUNT - POLAROID_MIN_COUNT + 1));
+    const photos = helpers.pickPhotos(Math.min(count, POLAROID_MAX_COUNT), cfg, [], false);
+    return { photos };
+  },
+
+  build(picked) {
+    return buildPolaroid(picked.photos);
+  },
+};
+
 function jitter(base, range) {
   return base + (Math.random() - 0.5) * 2 * range;
 }

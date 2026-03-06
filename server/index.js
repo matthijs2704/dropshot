@@ -85,6 +85,7 @@ app.use(session({
   secret: _getOrCreateSessionSecret(),
   resave: false,
   saveUninitialized: false,
+  proxy: true,
   cookie: {
     httpOnly: true,
     sameSite: 'lax',

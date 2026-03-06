@@ -1,0 +1,28 @@
+services:
+  pixelplein:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # uncomment to override defaults:
+      # - DISPLAY_WIDTH=1920
+      # - DISPLAY_HEIGHT=1080
+      # - THUMB_W=960
+      # - THUMB_H=540
+    volumes:
+      - ./config.json:/app/config.json
+      - photos:/app/photos
+      - data:/app/data
+      - cache:/app/cache
+      - slide-assets:/app/slide-assets
+      - submission-assets:/app/submission-assets
+
+volumes:
+  photos:
+  data:
+  cache:
+  slide-assets:
+  submission-assets:

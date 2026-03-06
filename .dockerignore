@@ -1,0 +1,26 @@
+node_modules
+npm-debug.log*
+
+# runtime data — never bake into image
+photos/
+cache/
+data/
+slide-assets/videos/
+slide-assets/images/
+submission-assets/
+config.json
+*.tmp
+
+# repo meta
+.git
+.gitignore
+.vscode
+.idea
+*.md
+*.swp
+*.swo
+.DS_Store
+.env
+.env.*
+Dockerfile
+docker-compose.yml

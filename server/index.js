@@ -9,12 +9,12 @@ const session     = require('express-session');
 const compression = require('compression');
 
 const { loadConfig, getConfig, saveConfig } = require('./config');
-const { initDb, loadPhotoOverrides, DB_PATH } = require('./db');
+const { initDb, loadPhotoOverrides, loadAllPhotoMetadata, DB_PATH } = require('./db');
 const state          = require('./state');
 const { createWss }  = require('./features/ws/index');
 const { startWatcher } = require('./features/ingest/watcher');
 const { scanPhotos, PHOTOS_DIR } = require('./features/ingest/index');
-const { CACHE_DIR, THUMB_DIR } = require('./features/ingest/process');
+const { CACHE_DIR, THUMB_DIR, toCacheFilePath, toThumbFilePath } = require('./features/ingest/process');
 const { startAlertScheduler, stopAlertScheduler } = require('./features/alerts/scheduler');
 const { initAlertStore } = require('./features/alerts/store');
 const { initSubmissionStore } = require('./features/submissions/store');
@@ -67,6 +67,27 @@ async function _loadPhotoOverridesFromDb() {
   for (const entry of entries) {
     state.photoOverrides.set(entry.id, { heroCandidate: Boolean(entry.heroCandidate) });
   }
+}
+
+/**
+ * Restore full photo state from the database so scanPhotos() can skip
+ * re-running Sharp on files whose cache is still valid.
+ */
+async function _preloadPhotoStateFromDb() {
+  const rows = await loadAllPhotoMetadata();
+  let restored = 0;
+  for (const row of rows) {
+    if (!row.id) continue;
+    // Derive cache/thumb paths the same way process.js does
+    row.cachePath = toCacheFilePath(row.id);
+    row.thumbPath = toThumbFilePath(row.id);
+    // Apply any heroCandidate override from the separate overrides map
+    const override = state.photoOverrides.get(row.id);
+    if (override) row.heroCandidate = override.heroCandidate;
+    state.photosById.set(row.id, row);
+    restored++;
+  }
+  if (restored) console.log(`[db] Restored ${restored} photo records from database`);
 }
 
 // ---------------------------------------------------------------------------
@@ -148,6 +169,7 @@ async function boot() {
   await initAlertStore();
   await initSubmissionStore();
   await _loadPhotoOverridesFromDb();
+  await _preloadPhotoStateFromDb(); // restore ready-photo state before scan
 
   startWatcher();
   await scanPhotos(true);

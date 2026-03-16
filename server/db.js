@@ -190,6 +190,33 @@ async function loadPhotoOverrides() {
   return rows.map(r => ({ id: r.photo_id, heroCandidate: Boolean(r.hero_candidate) }));
 }
 
+/**
+ * Load all persisted photo records so the server can restore ready-photo state
+ * on startup without re-running Sharp on every file.
+ * @returns {Promise<object[]>}
+ */
+async function loadAllPhotoMetadata() {
+  const rows = await all('SELECT * FROM photo_metadata');
+  return rows.map(r => ({
+    id:            r.photo_id,
+    name:          r.name          || null,
+    eventGroup:    r.event_group   || null,
+    relativePath:  r.relative_path || null,
+    sourcePath:    r.source_path   || null,
+    sourceUrl:     r.source_url    || null,
+    displayUrl:    r.display_url   || null,
+    addedAt:       r.added_at      || 0,
+    processedAt:   r.processed_at  || null,
+    status:        r.status        || 'queued',
+    error:         r.error         || null,
+    width:         r.width         || null,
+    height:        r.height        || null,
+    displayWidth:  r.display_width  || null,
+    displayHeight: r.display_height || null,
+    heroCandidate: Boolean(r.hero_candidate),
+  }));
+}
+
 module.exports = {
   DB_PATH,
   initDb,
@@ -203,4 +230,5 @@ module.exports = {
   setHeroCandidate,
   deletePhotoMetadata,
   loadPhotoOverrides,
+  loadAllPhotoMetadata,
 };

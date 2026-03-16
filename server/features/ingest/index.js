@@ -84,43 +84,57 @@ async function upsertPhotoFromPath(filePath) {
   const filename = path.basename(id);
   const existing = state.photosById.get(id);
 
-  // Determine addedAt for new photos:
-  // - For brand-new photos (not in state and no existing cache): use Date.now()
-  //   so recency bias correctly reflects when they entered the system.
-  // - For photos restored on startup/rescan (cache file exists): use file mtime
-  //   as a reasonable approximation of original arrival order. This is imperfect
-  //   (camera timestamps may be off) but prevents all photos from competing as
-  //   "brand new" on every server restart.
-  let addedAt = Date.now();
+  // Fast-path: photo was already processed and its cache is at least as new as
+  // the source file → nothing to do.  Only update the live mutable fields.
+  if (existing?.status === 'ready' && existing.cachePath) {
+    try {
+      const [srcStat, cacheStat] = await Promise.all([
+        fsp.stat(filePath),
+        fsp.stat(existing.cachePath),
+      ]);
+      if (srcStat.mtimeMs <= cacheStat.mtimeMs) {
+        // Source unchanged — keep existing state, skip reprocessing
+        existing.sourcePath  = filePath;
+        existing.sourceUrl   = `/photos-original/${id}`;
+        return;
+      }
+    } catch {
+      // One of the files is missing — fall through to reprocess
+    }
+  }
+
+  // Determine addedAt for photos not yet in state:
+  // - Brand-new (no cache): Date.now() so recency bias reflects true arrival.
+  // - Restored from disk after cache wipe: use cache mtime to preserve order.
+  let addedAt = existing?.addedAt || Date.now();
   if (!existing) {
     const cachePath = toCacheFilePath(id);
     try {
       const cStat = await fsp.stat(cachePath);
-      // Cache exists → this photo was processed in a previous run; use mtime
       addedAt = cStat.mtimeMs;
     } catch {
-      // No cache → genuinely new photo; keep Date.now()
+      // No cache file → genuinely new
     }
   }
 
   const photo = existing || {
     id,
     relativePath: id,
-    name: filename,
-    eventGroup: toEventGroup(id),
-    sourcePath: filePath,
-    sourceUrl: `/photos-original/${id}`,
-    displayUrl: '',
+    name:         filename,
+    eventGroup:   toEventGroup(id),
+    sourcePath:   filePath,
+    sourceUrl:    `/photos-original/${id}`,
+    displayUrl:   '',
     addedAt,
-    processedAt: null,
-    status: 'queued',
+    processedAt:  null,
+    status:       'queued',
   };
 
-  photo.sourcePath  = filePath;
-  photo.sourceUrl   = `/photos-original/${id}`;
+  photo.sourcePath   = filePath;
+  photo.sourceUrl    = `/photos-original/${id}`;
   photo.relativePath = id;
-  photo.name        = filename;
-  photo.eventGroup  = toEventGroup(id);
+  photo.name         = filename;
+  photo.eventGroup   = toEventGroup(id);
   state.photosById.set(id, photo);
   upsertPhotoMetadata(photo).catch(err => {
     console.warn(`[ingest] failed to persist metadata for ${id}: ${err.message}`);

@@ -150,12 +150,29 @@ export function slideDurationMs(slide, defaultSec) {
 }
 
 /**
- * Return a Promise that resolves after ms milliseconds — for use as slide play().
+ * Return a Promise that resolves after ms milliseconds, or immediately when
+ * the optional AbortSignal is aborted.
  * @param {number} ms
+ * @param {AbortSignal} [signal]
  * @returns {Promise<void>}
  */
-export function slideDelay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+export function slideDelay(ms, signal) {
+  return new Promise(resolve => {
+    if (signal?.aborted) {
+      resolve();
+      return;
+    }
+
+    const timer = setTimeout(done, ms);
+
+    function done() {
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', done);
+      resolve();
+    }
+
+    if (signal) signal.addEventListener('abort', done, { once: true });
+  });
 }
 
 /**

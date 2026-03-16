@@ -112,6 +112,6 @@ export async function buildArticleSlide(slide) {
 
   return {
     el:   rootEl,
-    play: () => slideDelay(durationMs),
+    play: (signal) => slideDelay(durationMs, signal),
   };
 }

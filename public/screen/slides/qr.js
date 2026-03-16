@@ -58,6 +58,6 @@ export async function buildQrSlide(slide) {
 
   return {
     el:   wrap,
-    play: () => slideDelay(durationMs),
+    play: (signal) => slideDelay(durationMs, signal),
   };
 }

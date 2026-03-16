@@ -119,6 +119,7 @@ async function doLoadConfig() {
     ovRefresh();
     settingsRefresh();
     _refreshPlaylistSelects();
+    refreshSlides(null, _playlists);
     _updateScreenHints();
     _populateThemeSelect();
     pendingChanges = false;
@@ -389,8 +390,7 @@ function _renderScreenHealth(prefix, data) {
 
 const PAGE_TITLES = {
   screens:   'Dashboard',
-  playlists: 'Playlists',
-  content:   'Content',
+  slides:    'Slides',
   photos:    'Photos',
   signage:   'Signage',
   schedule:  'Schedule',
@@ -416,8 +416,8 @@ function setPage(page) {
   if (fallbackBtn) fallbackBtn.style.display = page === 'advanced' ? '' : 'none';
 
   // Lazy-load page data
-  if (page === 'photos')    refreshPhotos();
-  if (page === 'playlists' || page === 'content') doLoadSlides();
+  if (page === 'photos') refreshPhotos();
+  if (page === 'slides') doLoadSlides();
   if (page === 'signage' || page === 'schedule') window._loadAlertsAndSchedule?.().catch(() => {});
 }
 
@@ -501,6 +501,7 @@ function connectWs() {
         ovRefresh();
         settingsRefresh();
         _refreshPlaylistSelects();
+        refreshSlides(null, _playlists);
         _updateScreenHints();
         _populateThemeSelect();
       }
@@ -604,6 +605,7 @@ async function boot() {
   }
 
   window._applyScreenCount = _applyScreenCount;
+  window._refreshScreenPlaylistSelects = _refreshPlaylistSelects;
 
   initQuickTab(getConfig, onChanged);
   initAdvancedTab(getConfig, onChanged);

@@ -16,5 +16,11 @@ export function buildWebpageSlide(slide) {
 
   const durationMs = slideDurationMs(slide, 15);
 
-  return { el: wrap, play: () => slideDelay(durationMs) };
+  return {
+    el: wrap,
+    play: (signal) => slideDelay(durationMs, signal),
+    destroy() {
+      try { iframe.src = 'about:blank'; } catch {}
+    },
+  };
 }

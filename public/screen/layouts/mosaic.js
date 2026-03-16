@@ -81,15 +81,16 @@ export const layout = {
    *
    * @param {Object} ctx
    * @param {HTMLElement[]} ctx.slotEls
-   * @param {Object}        ctx.cfg
-   * @param {number}        ctx.cycleStart
-   * @param {string[]}      ctx.visibleIds
-   * @param {Function}      ctx.pickMorePhotos - (count, options) => Object[]
-   * @returns {Promise<string[]|null>} new visible IDs (or null)
+    * @param {Object}        ctx.cfg
+    * @param {number}        ctx.cycleStart
+    * @param {string[]}      ctx.visibleIds
+   * @param {AbortSignal}   [ctx.signal]
+    * @param {Function}      ctx.pickMorePhotos - (count, options) => Object[]
+    * @returns {Promise<string[]|null>} new visible IDs (or null)
    */
   async postMount(ctx) {
     const newIds = await runMosaicTransitions(
-      ctx.slotEls, ctx.cfg, ctx.cycleStart, ctx.pickMorePhotos,
+      ctx.slotEls, ctx.cfg, ctx.cycleStart, ctx.pickMorePhotos, ctx.signal,
     );
     return newIds;
   },
@@ -219,9 +220,10 @@ export function buildMosaic(templateName, heroPhoto, otherPhotos, minTilePx, cfg
  * @param {Object}        cfg
  * @param {number}        cycleStart   - Date.now() at the start of this layout cycle
  * @param {Function}      pickMorePhotos - (count, options) => Object[] fresh photos
+ * @param {AbortSignal}   [signal]
  * @returns {Promise<string[]>} New visible IDs after swaps
  */
-export async function runMosaicTransitions(slotEls, cfg, cycleStart, pickMorePhotos) {
+export async function runMosaicTransitions(slotEls, cfg, cycleStart, pickMorePhotos, signal) {
   const rounds       = cfg.mosaicSwapRounds ?? 1;
   const swapCount    = cfg.mosaicSwapCount  ?? 2;
   const layoutDur    = cfg.layoutDuration   || 8000;
@@ -244,12 +246,15 @@ export async function runMosaicTransitions(slotEls, cfg, cycleStart, pickMorePho
   const reservedIds = new Set(slotEls.map(s => s.dataset.photoId).filter(Boolean));
 
   for (let round = 0; round < rounds; round++) {
+    if (signal?.aborted) break;
+
     // When should this round fire, measured from cycleStart?
     const targetMs = settleMs + round * roundInterval;
     const elapsed  = Date.now() - cycleStart;
     const waitMs   = Math.max(0, targetMs - elapsed);
 
-    await new Promise(r => setTimeout(r, waitMs));
+    const canContinue = await _delay(waitMs, signal);
+    if (!canContinue) break;
 
     // Pick swappable slots (non-hero only, must have an image)
     const swappable = slotEls.filter(s => s.dataset.isHero !== '1' && s.querySelector('img'));
@@ -260,6 +265,8 @@ export async function runMosaicTransitions(slotEls, cfg, cycleStart, pickMorePho
       .slice(0, Math.min(swapCount, swappable.length));
 
     for (let i = 0; i < targets.length; i++) {
+      if (signal?.aborted) break;
+
       const slot  = targets[i];
       const slotIsPortrait = slot.dataset.portrait === '1';
       const excludeIds = [...reservedIds];
@@ -279,15 +286,46 @@ export async function runMosaicTransitions(slotEls, cfg, cycleStart, pickMorePho
       if (!photo) continue;
       reservedIds.add(photo.id);
 
-      setTimeout(() => {
+      const delayed = await _delay(i === 0 ? 0 : staggerMs, signal);
+      if (!delayed || !slot.isConnected) continue;
+
+      // Slot may have been reused while awaiting stagger.
+      if (signal?.aborted) break;
+      try {
         crossFadeSlot(slot, photo, fadeDuration);
         newIds.push(photo.id);
-      }, i * staggerMs);
+      } catch {}
     }
 
     // Wait for all fades in this round to finish before the next round
-    await new Promise(r => setTimeout(r, targets.length * staggerMs + fadeDuration + 80));
+    const roundDone = await _delay(fadeDuration + 80, signal);
+    if (!roundDone) break;
   }
 
   return newIds;
+}
+
+function _delay(ms, signal) {
+  return new Promise(resolve => {
+    if (signal?.aborted) {
+      resolve(false);
+      return;
+    }
+
+    const timer = setTimeout(done, Math.max(0, ms));
+
+    function done() {
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
+      resolve(true);
+    }
+
+    function onAbort() {
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
+      resolve(false);
+    }
+
+    if (signal) signal.addEventListener('abort', onAbort, { once: true });
+  });
 }

@@ -61,6 +61,6 @@ export function buildTextCardSlide(slide) {
 
   return {
     el:   wrap,
-    play: () => slideDelay(durationMs),
+    play: (signal) => slideDelay(durationMs, signal),
   };
 }

@@ -25,11 +25,36 @@ export function buildImageSlide(slide) {
 
   const wrap = el('div', { cls: 'slide-image' }, img);
 
-  function play() {
+  function play(signal) {
     return new Promise(resolve => {
-      // If the image fails to load, still advance after duration
-      img.addEventListener('error', () => setTimeout(resolve, 1000), { once: true });
-      setTimeout(resolve, durationMs);
+      if (signal?.aborted) {
+        resolve();
+        return;
+      }
+
+      let done = false;
+
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(mainTimer);
+        clearTimeout(errTimer);
+        img.removeEventListener('error', onError);
+        if (signal) signal.removeEventListener('abort', onAbort);
+        resolve();
+      };
+
+      const onAbort = () => finish();
+      const onError = () => {
+        clearTimeout(mainTimer);
+        errTimer = setTimeout(finish, 1000);
+      };
+
+      let errTimer = null;
+      const mainTimer = setTimeout(finish, durationMs);
+      img.addEventListener('error', onError, { once: true });
+
+      if (signal) signal.addEventListener('abort', onAbort, { once: true });
     });
   }
 

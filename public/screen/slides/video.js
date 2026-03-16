@@ -25,8 +25,13 @@ export function buildVideoSlide(slide) {
   const MAX_DURATION_MS = 5 * 60 * 1000;
   const ERROR_HOLD_MS   = 2_000; // if a frame decoded, show it briefly before advancing
 
-  function play() {
+  function play(signal) {
     return new Promise(resolve => {
+      if (signal?.aborted) {
+        resolve();
+        return;
+      }
+
       let playsLeft = playCount === 0 ? Infinity : playCount;
       let done      = false;
 
@@ -38,7 +43,13 @@ export function buildVideoSlide(slide) {
         clearTimeout(safetyTimer);
         video.removeEventListener('ended',  onEnded);
         video.removeEventListener('error',  onError);
+        if (signal) signal.removeEventListener('abort', onAbort);
         resolve();
+      }
+
+      function onAbort() {
+        try { video.pause(); } catch {}
+        finish();
       }
 
       function onEnded() {
@@ -64,6 +75,7 @@ export function buildVideoSlide(slide) {
       // Register listeners BEFORE calling play() so nothing is missed.
       video.addEventListener('ended', onEnded);
       video.addEventListener('error', onError, { once: true });
+      if (signal) signal.addEventListener('abort', onAbort, { once: true });
 
       // Call play() immediately — if the browser needs more data it queues
       // the request internally; the promise only rejects on actual failures
@@ -74,5 +86,15 @@ export function buildVideoSlide(slide) {
     });
   }
 
-  return { el: wrap, play };
+  return {
+    el: wrap,
+    play,
+    destroy() {
+      try { video.pause(); } catch {}
+      try {
+        video.removeAttribute('src');
+        video.load();
+      } catch {}
+    },
+  };
 }

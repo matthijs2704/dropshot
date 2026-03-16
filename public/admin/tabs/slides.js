@@ -1,7 +1,7 @@
 // Admin tab: Slides — slide library management and playlist editor
 
 import { icon } from '/shared/icons.js';
-import { esc as _esc } from '/shared/utils.js';
+import { esc as _esc, activeScreenIds as _activeScreenIds } from '/shared/utils.js';
 import { showToast as _showToast } from '../app.js';
 
 // ---------------------------------------------------------------------------
@@ -37,6 +37,7 @@ export function initSlidesTab(getConfig, onChanged) {
   _getConfig = getConfig;
   _onChanged = onChanged;
   _bindUpload();
+  _renderScreenAssignments();
 }
 
 export function refreshSlides(slides, playlists) {
@@ -44,6 +45,7 @@ export function refreshSlides(slides, playlists) {
   if (playlists !== null) _playlists = playlists || [];
   _renderLibrary();
   _renderPlaylistList();
+  _renderScreenAssignments();
   // Re-render editor for the active playlist (data may have changed)
   if (_activePlId) {
     const pl = _playlists.find(p => p.id === _activePlId);
@@ -557,6 +559,7 @@ function _renderPlaylistList() {
       _activePlId = pl.id;
       _renderPlaylistList();
       _renderPlaylistEditor(pl);
+      _renderScreenAssignments();
     });
     container.appendChild(item);
   }
@@ -567,6 +570,7 @@ function _renderPlaylistList() {
   }
   const active = _playlists.find(p => p.id === _activePlId) || _playlists[0];
   _renderPlaylistEditor(active);
+  _renderScreenAssignments();
 }
 
 // ---------------------------------------------------------------------------
@@ -675,6 +679,58 @@ function _renderPlaylistEditor(pl) {
   _initDragReorder(document.getElementById('pl-in-list'), pl);
 }
 
+// ---------------------------------------------------------------------------
+// Screen assignment sidebar
+// ---------------------------------------------------------------------------
+
+function _renderScreenAssignments() {
+  const list = document.getElementById('slides-screen-assignments');
+  if (!list || !_getConfig) return;
+
+  const cfg = _getConfig() || {};
+  const ids = _activeScreenIds(cfg);
+  if (!ids.length) {
+    list.innerHTML = '<div class="muted" style="font-size:12px">No screens configured.</div>';
+    return;
+  }
+
+  list.innerHTML = ids.map(id => {
+    const assignedId = cfg.screens?.[id]?.playlistId || '';
+    const assignedPl = _playlists.find(p => p.id === assignedId) || null;
+    const activeCls  = assignedId && assignedId === _activePlId ? ' active-assignment' : '';
+    const options    = ['<option value="">- None (photo-only) -</option>']
+      .concat(_playlists.map(pl => `<option value="${_esc(pl.id)}">${_esc(pl.name)}</option>`))
+      .join('');
+
+    return `
+      <div class="slides-screen-item${activeCls}" data-screen="${id}">
+        <div class="slides-screen-head">
+          <span class="slides-screen-name">Screen ${id}</span>
+          <span class="slides-screen-status">${assignedPl ? `${assignedPl.slideIds.length} slides` : 'photo-only'}</span>
+        </div>
+        <select id="slides-screen-pl-${id}">${options}</select>
+        <div class="slides-screen-meta">${assignedPl ? `Assigned: ${_esc(assignedPl.name)}` : 'No playlist assigned'}</div>
+      </div>
+    `;
+  }).join('');
+
+  ids.forEach(id => {
+    const assignedId = cfg.screens?.[id]?.playlistId || '';
+    const sel = document.getElementById(`slides-screen-pl-${id}`);
+    if (!sel) return;
+    sel.value = assignedId;
+    sel.addEventListener('change', () => {
+      if (!cfg.screens) cfg.screens = {};
+      if (!cfg.screens[id]) cfg.screens[id] = {};
+      cfg.screens[id].playlistId = sel.value || null;
+      _onChanged?.();
+      _renderPlaylistList();
+      _renderScreenAssignments();
+      window._refreshScreenPlaylistSelects?.();
+    });
+  });
+}
+
 function _initDragReorder(list, pl) {
   if (!list) return;
   let dragged = null;
@@ -740,5 +796,3 @@ export async function createNewPlaylist() {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-

@@ -1,8 +1,8 @@
 // Layout cycle dispatcher: loads layout descriptors, picks layout type,
-// builds DOM, runs transitions.
+// and routes every render through a shared lifecycle manager.
 
 import { buildSubmissionWall } from './submissionwall.js';
-import { runTransition }    from '../transitions.js';
+import { createLayoutLifecycle } from '../layout-lifecycle.js';
 import {
   pickPhotos,
   pickHeroPhoto,
@@ -22,6 +22,7 @@ import {
   getInterleaveEvery,
   hasPlaySoon,
   updateSlidesConfig,
+  resetSlidesRuntime,
 } from '../slides/index.js';
 import { getBottomInset } from '../overlays/index.js';
 import { getScreenCfg } from '../../shared/utils.js';
@@ -36,7 +37,6 @@ const DEFAULT_LAYOUT_DUR_MS = 8000;   // fallback layout duration
 const DEFAULT_HERO_LOCK_SEC = 30;     // cross-screen hero lock TTL
 
 // Layout module paths, keyed by layout name.
-// Dynamic import() loads each on first use; broken files are skipped.
 const _LAYOUT_PATHS = {
   fullscreen:  './fullscreen.js',
   sidebyside:  './sidebyside.js',
@@ -54,32 +54,24 @@ export const displayState = {
   lastCycleDurationMs: null,
 };
 
-let _container       = null;
-let _currentEl       = null;
-let _config          = null;
-let _globalConfig    = null;
-let _heroLocks       = new Map();
-let _screenId        = null;
-let _cycleTimer      = null;
-let _running         = false;
-let _destroyCurrent  = null;    // cleanup fn from current layout (e.g. submission wall paging)
-let _photoCycleCount = 0;       // counts photo layouts since last slide interleave
-let _lastSubmissionWallAt = Date.now();
+let _container             = null;
+let _lifecycle             = null;
+let _config                = null;
+let _globalConfig          = null;
+let _heroLocks             = new Map();
+let _screenId              = null;
+let _cycleTimer            = null;
+let _running               = false;
+let _photoCycleCount       = 0;       // completed photo cycles since last slide interleave
+let _lastSubmissionWallAt  = Date.now();
 
-/** @type {Map<string, Object>} name → layout descriptor (populated by _loadLayouts) */
+/** @type {Map<string, Object>} name → layout descriptor */
 let _layouts = new Map();
 
 // ---------------------------------------------------------------------------
 // Layout loading
 // ---------------------------------------------------------------------------
 
-/**
- * Dynamically import all layout modules.  Each module must export a `layout`
- * descriptor with { name, minPhotos, pick, build, postMount? }.
- *
- * Broken or missing layout files are skipped with a warning — they won't
- * crash the cycle.
- */
 async function _loadLayouts() {
   const entries = Object.entries(_LAYOUT_PATHS);
   const results = await Promise.allSettled(
@@ -98,9 +90,6 @@ async function _loadLayouts() {
   }
 }
 
-// Kick off layout loading immediately (top-level await not used so the
-// module evaluates synchronously; _loadLayouts resolves before the first
-// runCycle fires because initCycle + config must arrive first).
 const _layoutsReady = _loadLayouts();
 
 // ---------------------------------------------------------------------------
@@ -114,16 +103,23 @@ function _buildHelpers() {
   };
 }
 
+function _scheduleCycle(delayMs) {
+  if (!_running) return;
+  if (_cycleTimer) {
+    clearTimeout(_cycleTimer);
+    _cycleTimer = null;
+  }
+  _cycleTimer = setTimeout(runCycle, Math.max(0, Number(delayMs) || 0));
+}
+
 // ---------------------------------------------------------------------------
 // Init / config
 // ---------------------------------------------------------------------------
 
-/**
- * Initialise the cycle engine.
- */
 export function initCycle(container, screenId) {
   _container = container;
   _screenId  = screenId;
+  _lifecycle = createLayoutLifecycle(container);
   initSlides(container, screenId);
 }
 
@@ -138,33 +134,30 @@ export function updateHeroLocks(locks) {
   _heroLocks = new Map(locks.map(l => [l.photoId, l]));
 }
 
-/**
- * Start the layout cycle loop.
- */
 export function startCycle() {
   if (_running) return;
   _running = true;
-
   const phaseMs = _config?.cyclePhaseMs || 0;
-  setTimeout(runCycle, phaseMs);
+  _scheduleCycle(phaseMs);
 }
 
 export function stopCycle() {
   _running = false;
-  if (_cycleTimer) { clearTimeout(_cycleTimer); _cycleTimer = null; }
-  if (_destroyCurrent) { _destroyCurrent(); _destroyCurrent = null; }
+  _photoCycleCount = 0;
+  if (_cycleTimer) {
+    clearTimeout(_cycleTimer);
+    _cycleTimer = null;
+  }
+  _lifecycle?.clear('stop');
+  resetSlidesRuntime();
 }
 
 // ---------------------------------------------------------------------------
 // Pool size helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Count ready photos in the current pool (respects group filtering).
- * Used to downgrade layouts when the pool is too small.
- */
 function _readyPoolSize(cfg) {
-  const groupMode   = cfg.groupMode  || 'auto';
+  const groupMode   = cfg.groupMode   || 'auto';
   const activeGroup = cfg.activeGroup || 'ungrouped';
   const all = Array.from(photoRegistry.values()).filter(p => p.status === 'ready');
   if (groupMode !== 'manual') return all.length;
@@ -175,10 +168,6 @@ function _readyPoolSize(cfg) {
 // Submission wall (separate code path — not a photo layout)
 // ---------------------------------------------------------------------------
 
-/**
- * Build a submission wall layout.  Returns null when the wall should be
- * skipped (empty items + hideWhenEmpty), signalling runCycle to fall back.
- */
 function _buildSubmissionWallLayout(cycleStart, submissionMode, hasSubmissions, hideWhenEmpty, wallOptions) {
   const mode = submissionMode === 'off' ? 'both' : submissionMode;
   const pageSize = 6;
@@ -199,30 +188,19 @@ function _buildSubmissionWallLayout(cycleStart, submissionMode, hasSubmissions, 
 // Layout selection (pool-size aware)
 // ---------------------------------------------------------------------------
 
-/**
- * Choose which layouts are eligible based on pool size and admin config.
- * Returns an array of layout names.
- *
- * @param {Object} cfg
- * @param {number} poolSize
- * @returns {{ candidates: string[], cfg: Object }}
- */
 function _selectCandidates(cfg, poolSize) {
   const allNames = Array.from(_layouts.keys());
 
-  // Filter by pool size — only layouts whose minPhotos we can satisfy
   let eligible = allNames.filter(name => {
     const desc = _layouts.get(name);
     return poolSize >= (desc?.minPhotos || 1);
   });
 
-  // For small pools (4-5), restrict mosaic to uniform templates only
   if (poolSize <= 5 && eligible.includes('mosaic')) {
     cfg = { ...cfg, templateEnabled: (cfg.templateEnabled || []).filter(t => t.startsWith('uniform')) };
     if (!cfg.templateEnabled.length) cfg = { ...cfg, templateEnabled: ['uniform-4', 'uniform-6'] };
   }
 
-  // Intersect with admin-enabled layouts (but always keep at least fullscreen)
   const adminEnabled = cfg.enabledLayouts || allNames;
   let candidates = eligible.filter(l => adminEnabled.includes(l));
   if (!candidates.length) candidates = ['fullscreen'];
@@ -235,35 +213,34 @@ function _selectCandidates(cfg, poolSize) {
 // ---------------------------------------------------------------------------
 
 async function runCycle() {
-  // Ensure layouts are loaded before first cycle
   await _layoutsReady;
 
-  if (!_running || !_config) {
-    _cycleTimer = setTimeout(runCycle, NO_CONFIG_RETRY_MS);
+  if (!_running || !_config || !_lifecycle) {
+    _scheduleCycle(NO_CONFIG_RETRY_MS);
     return;
   }
 
   let cfg = _config;
+  const transType = cfg.transition || 'fade';
+  const transMs   = cfg.transitionTime || 800;
 
   // ── Slide interleave check ────────────────────────────────────────────────
-  // Trigger if: counter reached the threshold, OR a Play Soon is pending.
-  // Play Soon can fire even without a playlist (interleaveEvery === 0).
   const interleaveEvery = getInterleaveEvery();
-  const shouldPlaySlide = hasPlaySoon() ||
-    (interleaveEvery > 0 && _photoCycleCount >= interleaveEvery);
+  const shouldPlaySlide = hasPlaySoon()
+    || (interleaveEvery > 0 && _photoCycleCount >= interleaveEvery);
 
   if (shouldPlaySlide) {
     _photoCycleCount = 0;
-    const played = await runNextSlide(_currentEl);
+    const played = await runNextSlide({
+      transition: transType,
+      transitionMs: transMs,
+      showRenderable: (renderable, transitionType, transitionMs) =>
+        _lifecycle.showRenderable(renderable, transitionType, transitionMs),
+    });
+
     if (!_running) return;
     if (played) {
-      // The slide runner swapped _currentEl via runTransition.
-      // Sync our pointer to the new element.
-      const children = Array.from(_container.children);
-      _currentEl = children[children.length - 1] || _currentEl;
-      for (const child of children.slice(0, -1)) child.remove();
-
-      _cycleTimer = setTimeout(runCycle, POST_SLIDE_DELAY_MS);
+      _scheduleCycle(POST_SLIDE_DELAY_MS);
       return;
     }
     // Nothing played (no playlist / all disabled) — fall through to photo cycle
@@ -287,10 +264,6 @@ async function runCycle() {
     layoutType = 'submissionwall';
   }
 
-  // ── Build the chosen layout ──────────────────────────────────────────────
-  // Tear down previous layout (e.g. submission wall paging timers)
-  if (_destroyCurrent) { _destroyCurrent(); _destroyCurrent = null; }
-
   let built, resolvedType, slotEls, layoutDesc;
 
   if (layoutType === 'submissionwall') {
@@ -300,7 +273,7 @@ async function runCycle() {
       resolvedType = result.layoutType;
       cfg = { ...cfg, _overrideDuration: result.duration };
     } else {
-      layoutType = 'fullscreen';  // fall back when wall is empty
+      layoutType = 'fullscreen';
     }
   }
 
@@ -314,65 +287,62 @@ async function runCycle() {
   }
 
   const duration = cfg._overrideDuration || cfg.layoutDuration || DEFAULT_LAYOUT_DUR_MS;
+  const visibleIds = built.visibleIds || [];
+  const startMotionAfterShow = resolvedType === 'submissionwall';
 
-  displayState.layoutType = resolvedType;
-  _destroyCurrent = built.destroy || null;
+  const shown = await _lifecycle.showRenderable({
+    el: built.el,
+    onWillShow() {
+      if (!startMotionAfterShow && cfg.kenBurnsEnabled !== false && built.startMotion) {
+        built.startMotion(duration);
+      }
+    },
+    async onDidShow({ signal }) {
+      if (startMotionAfterShow && built.startMotion) {
+        built.startMotion(duration);
+      }
 
-  const newEl      = built.el;
-  const visibleIds = built.visibleIds;
+      if (!layoutDesc?.postMount || !slotEls || signal.aborted) return;
 
-  // Mount new element (hidden behind current)
-  newEl.style.opacity = '0';
-  _container.appendChild(newEl);
+      try {
+        const newIds = await layoutDesc.postMount({
+          slotEls,
+          cfg,
+          cycleStart,
+          visibleIds,
+          signal,
+          pickMorePhotos: (count, options = {}) =>
+            pickPhotos(
+              count,
+              cfg,
+              [...visibleIds, ...(options.excludeIds || [])],
+              false,
+              {
+                orientation: options.orientation || 'any',
+                enforceOrientation: options.enforceOrientation,
+                orientationBoost: options.orientationBoost,
+              },
+            ),
+        });
 
-  // Start Ken Burns BEFORE the layout transition so the image is already in
-  // motion when it fades in. This avoids any snap/jump that occurs when Ken
-  // Burns is started after the transition completes (active CSS transitions on
-  // the element interfere with setting a new transform state).
-  if (cfg.kenBurnsEnabled !== false && built.startMotion) {
-    built.startMotion(duration);
-  }
+        if (!signal.aborted && newIds?.length) {
+          displayState.visibleIds = [...new Set([...displayState.visibleIds, ...newIds])];
+        }
+      } catch {}
+    },
+    destroy: built.destroy || null,
+  }, transType, transMs);
 
-  // Transition
-  await runTransition(_currentEl, newEl, cfg.transition || 'fade', cfg.transitionTime || 800);
-  if (!_running) return;
-  _currentEl = newEl;
+  if (!_running || !shown) return;
 
-  // Update display state
+  displayState.layoutType          = resolvedType;
   displayState.visibleIds          = visibleIds;
   displayState.lastCycleAt         = cycleStart;
   displayState.lastCycleDurationMs = Date.now() - cycleStart;
   displayState.focusGroup          = cfg.groupMode === 'manual' ? cfg.activeGroup : null;
 
-  // Run post-mount logic (e.g. mosaic tile swaps)
-  if (layoutDesc?.postMount && slotEls) {
-    layoutDesc.postMount({
-      slotEls,
-      cfg,
-      cycleStart,
-      visibleIds,
-      pickMorePhotos: (count, options = {}) =>
-        pickPhotos(
-          count,
-          cfg,
-          [...visibleIds, ...(options.excludeIds || [])],
-          false,
-          {
-            orientation: options.orientation || 'any',
-            enforceOrientation: options.enforceOrientation,
-            orientationBoost: options.orientationBoost,
-          },
-        ),
-    }).then(newIds => {
-      if (newIds) displayState.visibleIds = [...new Set([...displayState.visibleIds, ...newIds])];
-    }).catch(() => {});
-  }
-
-  // Count completed photo cycles (for slide interleave)
   _photoCycleCount += 1;
-
-  // Schedule next cycle
-  _cycleTimer = setTimeout(runCycle, duration);
+  _scheduleCycle(duration);
 }
 
 // ---------------------------------------------------------------------------
@@ -383,15 +353,6 @@ function _claimHero(photoId, ttlSec) {
   sendHeroClaim(photoId, ttlSec);
 }
 
-/**
- * Pick a hero photo, claim the cross-screen lock, and mark it as hero-shown.
- * Falls back to pickPhotos when no hero candidate passes the cooldown check.
- *
- * @param {Object}  cfg
- * @param {Object}  [options]        - orientation options forwarded to pickHeroPhoto
- * @param {boolean} [useFallback=true] - try pickPhotos if pickHeroPhoto returns null
- * @returns {Object|null} the chosen photo, or null if pool is empty
- */
 function _pickAndClaimHero(cfg, options = {}, useFallback = true) {
   const hero = pickHeroPhoto(cfg, _heroLocks, _screenId, options);
   const photo = hero || (useFallback

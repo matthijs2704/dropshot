@@ -4,7 +4,13 @@ const fs = require('fs');
 const fsp = require('fs').promises;
 const path = require('path');
 
-const CONFIG_FILE = path.join(__dirname, '..', 'config.json');
+// Config lives in the data directory so it persists in the Docker named
+// volume alongside the database — no bind-mount required.
+const DATA_DIR   = path.join(__dirname, '..', 'data');
+const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
+
+// Ensure the directory exists before any read/write attempt
+fs.mkdirSync(DATA_DIR, { recursive: true });
 const MAX_SCREENS = 4;
 
 const ALERT_STYLES = new Set(['banner', 'popup', 'countdown']);

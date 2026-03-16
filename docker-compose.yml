@@ -17,7 +17,6 @@ services:
       - traefik.http.routers.pixelplein.tls.certresolver=le
       - traefik.http.services.pixelplein.loadbalancer.server.port=3000
     volumes:
-      - ./config.json:/app/config.json
       - photos:/app/photos
       - data:/app/data
       - cache:/app/cache

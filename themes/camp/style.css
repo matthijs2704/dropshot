@@ -139,6 +139,43 @@
   --submission-wall-meta-font:     'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
 }
 
+/* ── Submit page branding header ─────────────────────────────────────────
+   Injected via submit-brand.html when this theme is active.
+──────────────────────────────────────────────────────────────────────────── */
+.theme-brand {
+  padding: 16px 0 0;
+  text-align: center;
+}
+
+.theme-brand-event {
+  width: clamp(160px, 42vw, 320px);
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.6));
+}
+
+.theme-brand-divider {
+  height: 1.5px;
+  margin: 16px auto 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(189, 149, 110, 0.40) 10%,
+    rgba(226, 210, 155, 0.88) 35%,
+    rgba(242, 228, 178, 0.96) 50%,
+    rgba(226, 210, 155, 0.88) 65%,
+    rgba(189, 149, 110, 0.40) 90%,
+    transparent
+  );
+}
+
+/* Title gets the Cinzel serif font on camp theme */
+.title {
+  font-family: 'Cinzel', Georgia, serif;
+  letter-spacing: 0.02em;
+}
+
 /* ── Infobar: pad away from corner logos ─────────────────────────────────
    The regio logo (bottom-left) and RSW logo (bottom-right) sit at the
    screen corners and overlap the infobar.  Push the whole infobar content

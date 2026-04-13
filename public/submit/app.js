@@ -26,24 +26,24 @@ let _kind = 'screen';
 
 const KIND_COPY = {
   screen: {
-    pageSub: 'Kies hieronder of je iets voor het scherm wilt delen of een tip voor de kampkrant wilt insturen.',
-    modeNote: 'Deel een foto of kort bericht. Na moderatie kan het op het scherm verschijnen.',
+    pageSub: 'Deel een foto of bericht — na beoordeling kan het op het scherm verschijnen.',
+    modeNote: 'Voeg een foto toe en schrijf eventueel een kort berichtje erbij.',
     messageLabel: 'Bericht (optioneel)',
     messagePlaceholder: 'Schrijf een kort bericht...',
     photoLabel: 'Foto',
     photoHint: 'Voeg een foto toe als je wilt.',
-    buttonText: 'Insturen voor scherm',
-    success: 'Bedankt! Je inzending wordt beoordeeld voor het scherm.',
+    buttonText: 'Insturen voor het scherm',
+    success: 'Bedankt! Je inzending wordt bekeken en kan straks op het scherm verschijnen.',
   },
   kampkrant_tip: {
-    pageSub: 'Heb je iets opvallends, grappigs of sappigs gehoord? Stuur het door naar de kampkrant.',
-    modeNote: 'Dit komt bij de mediaredactie terecht en verschijnt niet rechtstreeks op het scherm.',
-    messageLabel: 'Tip voor kampkrant',
+    pageSub: 'Heb je iets opvallends, grappigs of leuks meegemaakt? Stuur een tip door naar de kampkrant.',
+    modeNote: 'Je tip komt bij de mediaredactie terecht en verschijnt niet op het fotoscherm.',
+    messageLabel: 'Jouw tip',
     messagePlaceholder: 'Typ hier je tip, verhaal of roddel...',
-    photoLabel: 'Foto of screenshot (optioneel)',
-    photoHint: 'Een foto mag, maar een duidelijke tiptekst is belangrijker.',
-    buttonText: 'Tip insturen',
-    success: 'Top, je tip is doorgestuurd naar de kampkrant.',
+    photoLabel: "Foto of screenshot (optioneel)",
+    photoHint: 'Een foto mag, maar een duidelijke tiptekst is het belangrijkste.',
+    buttonText: 'Tip doorsturen',
+    success: 'Bedankt! Je tip is doorgestuurd naar de kampkrant.',
   },
 };
 
@@ -88,22 +88,31 @@ function applySettings() {
 
 function applyTheme(themeId) {
   const current = document.getElementById('submit-theme-css');
+  const brandEl = document.getElementById('submit-brand');
+
   if (!themeId) {
     if (current) current.remove();
+    if (brandEl) brandEl.innerHTML = '';
     return;
   }
 
   const href = `/themes/${encodeURIComponent(themeId)}/style.css`;
   if (current) {
     if (current.getAttribute('href') !== href) current.setAttribute('href', href);
-    return;
+  } else {
+    const link = document.createElement('link');
+    link.id = 'submit-theme-css';
+    link.rel = 'stylesheet';
+    link.href = href;
+    document.head.appendChild(link);
   }
 
-  const link = document.createElement('link');
-  link.id = 'submit-theme-css';
-  link.rel = 'stylesheet';
-  link.href = href;
-  document.head.appendChild(link);
+  if (brandEl) {
+    fetch(`/themes/${encodeURIComponent(themeId)}/submit-brand.html`)
+      .then(r => r.ok ? r.text() : '')
+      .then(html => { if (html) brandEl.innerHTML = html; })
+      .catch(() => {});
+  }
 }
 
 async function loadSettings() {

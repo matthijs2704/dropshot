@@ -98,9 +98,12 @@ function _buildScreenForm(screenKey, cfg) {
       ${_toggleGroup(screenKey, 'templateEnabled', 'Template set',
           TEMPLATE_OPTIONS.map(t => [t.id, t.label]),
           s.templateEnabled || TEMPLATE_OPTIONS.map(t => t.id))}
-      ${_range(screenKey, 'cinematicWeight', 'Cinematic weight', 0, 100, 5, s.cinematicWeight ?? 65, v => v+'%')}
-      ${_range(screenKey, 'dynamicWeight',   'Dynamic weight',   0, 100, 5, s.dynamicWeight   ?? 25, v => v+'%')}
-      ${_range(screenKey, 'neutralWeight',   'Neutral weight',   0, 100, 5, s.neutralWeight   ?? 10, v => v+'%')}
+      ${_range(screenKey, 'cinematicWeight', 'Cinematic weight', 0, 100, 5, s.cinematicWeight ?? 65, v => v+'%',
+          'Hero + smaller tiles — editorial, one photo dominates')}
+      ${_range(screenKey, 'dynamicWeight',   'Dynamic weight',   0, 100, 5, s.dynamicWeight   ?? 25, v => v+'%',
+          'Equal-size grid — energetic, all photos same weight')}
+      ${_range(screenKey, 'neutralWeight',   'Neutral weight',   0, 100, 5, s.neutralWeight   ?? 10, v => v+'%',
+          'Mixed / portrait-heavy — balanced, no dominant photo')}
     </details>
 
     <details class="adv-section">
@@ -116,7 +119,8 @@ function _buildScreenForm(screenKey, cfg) {
       ${_range(screenKey, 'mosaicSwapRounds',    'Swaps per cycle',   0, 4,    1,    s.mosaicSwapRounds    ?? 1,   v => v+'×')}
       ${_range(screenKey, 'mosaicSwapCount',    'Photos per swap',   1, 12,   1,    s.mosaicSwapCount    ?? 2,   v => v)}
       ${_checkbox(screenKey, 'mosaicGroupSync', 'Swap all small tiles together', Boolean(s.mosaicGroupSync))}
-      ${_range(screenKey, 'mosaicDurationFactor', 'Mosaic speed',    30, 100, 5,    s.mosaicDurationFactor ?? 100, v => v+'%')}
+      ${_range(screenKey, 'mosaicDurationFactor', 'Mosaic speed',    30, 100, 5,    s.mosaicDurationFactor ?? 100, v => v+'%',
+          '100% = same duration as other layouts')}
       ${_range(screenKey, 'swapStaggerMs',      'Swap stagger',      60, 500,  10,   s.swapStaggerMs      ?? 140, v => v+'ms')}
     </details>
 
@@ -233,12 +237,12 @@ function _refreshGroupSelects() {
 // HTML builders
 // ---------------------------------------------------------------------------
 
-function _range(screen, key, label, min, max, step, value, fmt) {
+function _range(screen, key, label, min, max, step, value, fmt, hint = '') {
   const id  = `adv-${screen}-${key}`;
   const dsp = fmt ? fmt(value) : value;
   return `
     <div class="adv-field">
-      <label for="${id}">${label}</label>
+      <label for="${id}">${label}${hint ? `<span class="adv-hint">${hint}</span>` : ''}</label>
       <div class="adv-range-row">
         <input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${value}"
           data-screen="${screen}" data-key="${key}">

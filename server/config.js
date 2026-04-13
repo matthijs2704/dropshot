@@ -193,53 +193,6 @@ const SCREEN2_MISSING_DEFAULTS = {
   cyclePhaseMs: 800,
 };
 
-const SCREEN_CONFIG_KEYS = new Set([
-  'layoutDuration',
-  'transitionTime',
-  'enabledLayouts',
-  'transition',
-  'groupMode',
-  'activeGroup',
-  'groupMixPct',
-  'mosaicSwapRounds',
-  'mosaicSwapCount',
-  'mosaicSwapDelay',
-  'mosaicMinDwellMs',
-  'mosaicGroupSync',
-  'cinematicWeight',
-  'dynamicWeight',
-  'neutralWeight',
-  'kenBurnsEnabled',
-  'templateEnabled',
-  'heroCooldownSec',
-  'crossScreenHeroLockSec',
-  'recencyBias',
-  'minTilePx',
-  'swapStaggerMs',
-  'preferHeroSide',
-  'cyclePhaseMs',
-  'playlistId',
-  'tickerEnabled',
-  'tickerMessages',
-  'tickerMode',
-  'tickerAlign',
-  'tickerPosition',
-  'tickerSpeed',
-  'tickerFadeDwellSec',
-  'bugEnabled',
-  'bugText',
-  'bugCorner',
-  'bugImageUrl',
-  'qrBugEnabled',
-  'qrBugUrl',
-  'qrBugCorner',
-  'qrBugLabel',
-  'infoBarEnabled',
-  'infoBarShowClock',
-  'infoBarShowCurrentEvent',
-  'infoBarShowNextEvent',
-]);
-
 const ALLOWED_TEMPLATES = new Set([
   'hero-left-9',
   'hero-right-9',
@@ -251,6 +204,84 @@ const ALLOWED_TEMPLATES = new Set([
   'recent-strip-9',
   'portrait-bias-9',
 ]);
+
+// ---------------------------------------------------------------------------
+// Screen config schema
+// ---------------------------------------------------------------------------
+// Maps every allowed screen config key to its type and constraints.
+// sanitizeScreenConfig uses this to coerce and validate without per-key
+// handlers — to add a new key, add one line here and you're done.
+//
+// Types:
+//   bool           – Boolean(value)
+//   number         – clamped integer in [min, max]
+//   string         – String(value), falls back to spec.default when empty
+//   nullableString – null | String(value)
+//   enum           – one of spec.values; falls back to spec.default or unchanged
+//   stringArray    – array filtered to spec.allowed; falls back to spec.fallback
+//                    (or all allowed when fallback is omitted)
+//   special        – handled individually after the main loop
+// ---------------------------------------------------------------------------
+const SCREEN_CONFIG_SCHEMA = {
+  // Core playback
+  layoutDuration:          { type: 'number',      min: 3000,  max: 45000 },
+  transitionTime:          { type: 'number',      min: 200,   max: 3000  },
+  enabledLayouts:          { type: 'stringArray', allowed: ['fullscreen','sidebyside','featuredduo','polaroid','mosaic'], fallback: ['fullscreen'] },
+  transition:              { type: 'enum',        values: ['fade','slide','zoom'] },
+  // Grouping
+  groupMode:               { type: 'enum',        values: ['auto','manual'] },
+  activeGroup:             { type: 'string',      default: 'ungrouped' },
+  groupMixPct:             { type: 'number',      min: 0,     max: 80    },
+  // Mosaic rhythm
+  mosaicSwapRounds:        { type: 'number',      min: 0,     max: 4     },
+  mosaicSwapCount:         { type: 'number',      min: 1,     max: 12    },
+  mosaicSwapDelay:         { type: 'number',      min: 700,   max: 8000  },
+  mosaicMinDwellMs:        { type: 'number',      min: 500,   max: 30000 },
+  mosaicGroupSync:         { type: 'bool' },
+  swapStaggerMs:           { type: 'number',      min: 60,    max: 500   },
+  // Template style
+  cinematicWeight:         { type: 'number',      min: 0,     max: 100   },
+  dynamicWeight:           { type: 'number',      min: 0,     max: 100   },
+  neutralWeight:           { type: 'number',      min: 0,     max: 100   },
+  templateEnabled:         { type: 'stringArray', allowed: ALLOWED_TEMPLATES },  // fallback: all allowed
+  // Motion / photo selection
+  kenBurnsEnabled:         { type: 'bool' },
+  recencyBias:             { type: 'number',      min: 0,     max: 100   },
+  minTilePx:               { type: 'number',      min: 120,   max: 400   },
+  // Screen pairing
+  heroCooldownSec:         { type: 'number',      min: 10,    max: 240   },
+  crossScreenHeroLockSec:  { type: 'number',      min: 10,    max: 180   },
+  preferHeroSide:          { type: 'enum',        values: ['auto','left','right'], default: 'auto' },
+  cyclePhaseMs:            { type: 'number',      min: 0,     max: 8000  },
+  // Playlist
+  playlistId:              { type: 'nullableString' },
+  // Ticker overlay
+  tickerEnabled:           { type: 'bool' },
+  tickerMessages:          { type: 'special' },  // sanitized after main loop
+  tickerMode:              { type: 'enum',        values: ['fade','scroll'] },
+  tickerAlign:             { type: 'enum',        values: ['start','center','end'], default: 'start' },
+  tickerPosition:          { type: 'enum',        values: ['top','bottom'] },
+  tickerSpeed:             { type: 'number',      min: 10,    max: 300   },
+  tickerFadeDwellSec:      { type: 'number',      min: 1,     max: 60    },
+  // Image bug overlay
+  bugEnabled:              { type: 'bool' },
+  bugText:                 { type: 'string' },
+  bugCorner:               { type: 'enum',        values: ['top-left','top-right','bottom-left','bottom-right'], default: 'top-right' },
+  bugImageUrl:             { type: 'string' },
+  // QR bug overlay
+  qrBugEnabled:            { type: 'bool' },
+  qrBugUrl:                { type: 'string' },
+  qrBugCorner:             { type: 'enum',        values: ['top-left','top-right','bottom-left','bottom-right'], default: 'bottom-right' },
+  qrBugLabel:              { type: 'string' },
+  // Info bar overlay
+  infoBarEnabled:          { type: 'bool' },
+  infoBarShowClock:        { type: 'bool' },
+  infoBarShowCurrentEvent: { type: 'bool' },
+  infoBarShowNextEvent:    { type: 'bool' },
+};
+
+// Derived from schema — all keys that sanitizeScreenConfig will accept.
+const SCREEN_CONFIG_KEYS = new Set(Object.keys(SCREEN_CONFIG_SCHEMA));
 
 let config = defaultConfig();
 
@@ -516,9 +547,11 @@ function _migrateLegacyRoot(raw) {
 
 function sanitizeScreenConfig(input, base) {
   const next = { ...base };
+  const src  = input || {};
 
-  for (const [key, value] of Object.entries(input || {})) {
-    if (!SCREEN_CONFIG_KEYS.has(key)) continue;
+  for (const [key, value] of Object.entries(src)) {
+    const spec = SCREEN_CONFIG_SCHEMA[key];
+    if (!spec) continue;
 
     // Overlay keys accept null to mean "inherit from global defaults"
     if (value === null && OVERLAY_KEYS.includes(key)) {
@@ -526,118 +559,72 @@ function sanitizeScreenConfig(input, base) {
       continue;
     }
 
-    if (key === 'enabledLayouts') {
-      const allowed = ['fullscreen', 'sidebyside', 'featuredduo', 'polaroid', 'mosaic'];
-      next.enabledLayouts = Array.isArray(value)
-        ? value.filter(v => allowed.includes(v))
-        : next.enabledLayouts;
-      if (!next.enabledLayouts.length) next.enabledLayouts = ['fullscreen'];
-      continue;
+    switch (spec.type) {
+      case 'bool':
+        next[key] = Boolean(value);
+        break;
+
+      case 'number': {
+        const n = Number(value);
+        if (Number.isFinite(n)) next[key] = Math.max(spec.min, Math.min(spec.max, Math.floor(n)));
+        break;
+      }
+
+      case 'string':
+        next[key] = String(value ?? '') || (spec.default ?? '');
+        break;
+
+      case 'nullableString':
+        next[key] = value == null ? null : String(value);
+        break;
+
+      case 'enum': {
+        const v = String(value);
+        if (spec.values.includes(v)) next[key] = v;
+        else if (spec.default !== undefined) next[key] = spec.default;
+        break;
+      }
+
+      case 'stringArray': {
+        const allowed  = spec.allowed;
+        const filter   = v => (Array.isArray(allowed) ? allowed.includes(v) : allowed.has(v));
+        const filtered = Array.isArray(value) ? value.filter(filter) : [];
+        if (filtered.length) {
+          next[key] = filtered;
+        } else if (spec.fallback) {
+          next[key] = spec.fallback;
+        } else {
+          // No explicit fallback: allow all
+          next[key] = [...(Array.isArray(allowed) ? allowed : [...allowed])];
+        }
+        break;
+      }
+
+      // 'special' keys are handled individually below
     }
-    if (key === 'transition') {
-      if (['fade', 'slide', 'zoom'].includes(value)) next.transition = value;
-      continue;
-    }
-    if (key === 'groupMode') {
-      if (['auto', 'manual'].includes(value)) next.groupMode = value;
-      continue;
-    }
-    if (key === 'activeGroup') {
-      next.activeGroup = String(value || 'ungrouped');
-      continue;
-    }
-    if (key === 'preferHeroSide') {
-      next.preferHeroSide = value === 'left' || value === 'right' ? value : 'auto';
-      continue;
-    }
-    if (key === 'kenBurnsEnabled' || key === 'mosaicGroupSync') {
-      next[key] = Boolean(value);
-      continue;
-    }
-    if (key === 'templateEnabled') {
-      const selected = Array.isArray(value) ? value.filter(v => ALLOWED_TEMPLATES.has(v)) : [];
-      next.templateEnabled = selected.length ? selected : [...ALLOWED_TEMPLATES];
-      continue;
-    }
-    if (key === 'playlistId') {
-      next.playlistId = value == null ? null : String(value);
-      continue;
-    }
-    if (['tickerEnabled', 'bugEnabled', 'qrBugEnabled', 'infoBarEnabled', 'infoBarShowClock', 'infoBarShowCurrentEvent', 'infoBarShowNextEvent'].includes(key)) {
-      next[key] = Boolean(value);
-      continue;
-    }
-    // Migrate legacy single flag → both new flags
-    if (key === 'infoBarShowEvent') {
-      next.infoBarShowCurrentEvent = Boolean(value);
-      next.infoBarShowNextEvent    = Boolean(value);
-      continue;
-    }
-    if (key === 'tickerMessages') {
-      // Accept array of strings; filter blanks; max 50 entries, each max 500 chars
-      const msgs = Array.isArray(value) ? value : [];
-      next.tickerMessages = msgs
-        .map(v => String(v ?? '').trim())
-        .filter(Boolean)
-        .slice(0, 50)
-        .map(v => v.slice(0, 500));
-      continue;
-    }
-    if (key === 'tickerMode') {
-      next.tickerMode = value === 'fade' ? 'fade' : 'scroll';
-      continue;
-    }
-    if (key === 'tickerAlign') {
-      const valid = ['start', 'center', 'end'];
-      // migrate old 'scroll' default → 'start'
-      next.tickerAlign = valid.includes(value) ? value : 'start';
-      continue;
-    }
-    if (['bugText', 'bugImageUrl', 'qrBugUrl', 'qrBugLabel'].includes(key)) {
-      next[key] = String(value ?? '');
-      continue;
-    }
-    if (key === 'tickerPosition') {
-      next.tickerPosition = value === 'top' ? 'top' : 'bottom';
-      continue;
-    }
-    if (key === 'bugCorner' || key === 'qrBugCorner') {
-      const corners = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
-      next[key] = corners.includes(value) ? value : (key === 'bugCorner' ? 'top-right' : 'bottom-right');
-      continue;
-    }
-    if (typeof value !== 'number' || !Number.isFinite(value)) continue;
-    next[key] = value;
   }
 
-  next.layoutDuration = Math.max(3000, Math.min(45000, Math.floor(next.layoutDuration)));
-  next.transitionTime = Math.max(200, Math.min(3000, Math.floor(next.transitionTime)));
-  next.groupMixPct = Math.max(0, Math.min(80, Math.floor(next.groupMixPct)));
-  next.mosaicSwapRounds = Math.max(0, Math.min(4, Math.floor(next.mosaicSwapRounds)));
-  next.mosaicSwapCount = Math.max(1, Math.min(12, Math.floor(next.mosaicSwapCount)));
-  next.mosaicSwapDelay = Math.max(700, Math.min(8000, Math.floor(next.mosaicSwapDelay)));
-  next.mosaicMinDwellMs = Math.max(500, Math.min(30000, Math.floor(next.mosaicMinDwellMs)));
-  next.mosaicGroupSync = Boolean(next.mosaicGroupSync);
-  next.cinematicWeight = Math.max(0, Math.min(100, Math.floor(next.cinematicWeight)));
-  next.dynamicWeight = Math.max(0, Math.min(100, Math.floor(next.dynamicWeight)));
-  next.neutralWeight = Math.max(0, Math.min(100, Math.floor(next.neutralWeight)));
-  next.heroCooldownSec = Math.max(10, Math.min(240, Math.floor(next.heroCooldownSec)));
-  next.crossScreenHeroLockSec = Math.max(10, Math.min(180, Math.floor(next.crossScreenHeroLockSec)));
-  next.recencyBias = Math.max(0, Math.min(100, Math.floor(next.recencyBias ?? 60)));
-  next.minTilePx = Math.max(120, Math.min(400, Math.floor(next.minTilePx)));
-  next.swapStaggerMs = Math.max(60, Math.min(500, Math.floor(next.swapStaggerMs)));
-  next.cyclePhaseMs = Math.max(0, Math.min(8000, Math.floor(next.cyclePhaseMs)));
-  if (typeof next.tickerSpeed === 'number') {
-    next.tickerSpeed = Math.max(10, Math.min(300, Math.floor(next.tickerSpeed)));
-  }
-  if (typeof next.tickerFadeDwellSec === 'number') {
-    next.tickerFadeDwellSec = Math.max(1, Math.min(60, Math.floor(next.tickerFadeDwellSec)));
+  // tickerMessages: sanitize array of strings (max 50, each max 500 chars)
+  if (Object.prototype.hasOwnProperty.call(src, 'tickerMessages')) {
+    const msgs = Array.isArray(src.tickerMessages) ? src.tickerMessages : [];
+    next.tickerMessages = msgs
+      .map(v => String(v ?? '').trim())
+      .filter(Boolean)
+      .slice(0, 50)
+      .map(v => v.slice(0, 500));
   }
 
+  // Legacy migration: infoBarShowEvent → both new flags
+  if (Object.prototype.hasOwnProperty.call(src, 'infoBarShowEvent')) {
+    next.infoBarShowCurrentEvent = Boolean(src.infoBarShowEvent);
+    next.infoBarShowNextEvent    = Boolean(src.infoBarShowEvent);
+  }
+
+  // Weight sanity: at least one weight must be non-zero
   if ((next.cinematicWeight + next.dynamicWeight + next.neutralWeight) === 0) {
     next.cinematicWeight = 65;
-    next.dynamicWeight = 25;
-    next.neutralWeight = 10;
+    next.dynamicWeight   = 25;
+    next.neutralWeight   = 10;
   }
 
   return next;

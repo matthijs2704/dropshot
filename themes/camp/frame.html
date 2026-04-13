@@ -1,180 +1,191 @@
-<!-- Camp theme: decorative corner accents overlay -->
 <style>
   #theme-frame {
-    /* Elevate above slides but below any UI chrome */
-    z-index: 9000 !important;
+    z-index: 9110 !important;
   }
 
-  #theme-top-accessory {
-    background-image: url("/themes/camp/assets/top-accessory.png") !important;
-    background-size: contain !important;
-    background-repeat: no-repeat !important;
-    position: absolute;
-    top: -1rem;
-    left: 12.5vw;
-    width: 75vw;
-    height: 15vh;
-  }
-
-  #theme-bottom-right-accessory {
-    background-image: url("/themes/camp/assets/bottom-right-logo.png") !important;
-    background-size: contain !important;
-    background-repeat: no-repeat !important;
-  }
-
-  /* Subtle vignette */
-  #theme-frame .vignette {
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(
-      ellipse at center,
-      transparent 55%,
-      rgba(10, 6, 2, 0.45) 100%
-    );
-  }
-
-  /* Gold gradient rule that sits at the top edge of the infobar */
-  #infobar-gold-border {
+  #rsw-frame-shell {
     position: fixed;
-    bottom: var(--infobar-height, 60px);
-    left: 0;
-    right: 0;
-    height: 3px;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9110;
+  }
+
+  /* ── Double gold border ─────────────────────────────────────────────────
+     Each side is a separate fixed line so there is no aspect-ratio
+     distortion that the old single SVG background suffered from.
+  ──────────────────────────────────────────────────────────────────────── */
+
+  .rsw-border {
+    position: absolute;
+    pointer-events: none;
+  }
+
+  /* outer line */
+  .rsw-border-outer-top,
+  .rsw-border-outer-bottom {
+    left:   var(--rsw-frame-inset-x, 14px);
+    right:  var(--rsw-frame-inset-x, 14px);
+    height: 1.5px;
     background: linear-gradient(
       90deg,
-      transparent                  0%,
-      rgba(120,  80,  10, 0.0)     2%,
-      rgba(180, 120,  20, 0.6)     8%,
-      rgba(255, 210,  80, 0.95)   20%,
-      rgba(255, 240, 140, 1.0)    35%,
-      rgba(255, 255, 200, 1.0)    50%,
-      rgba(255, 240, 140, 1.0)    65%,
-      rgba(255, 210,  80, 0.95)   80%,
-      rgba(180, 120,  20, 0.6)    92%,
-      rgba(120,  80,  10, 0.0)    98%,
-      transparent                 100%
+      rgba(189, 149, 110, 0.30),
+      rgba(226, 210, 155, 0.90) 14%,
+      rgba(242, 228, 178, 0.96) 50%,
+      rgba(226, 210, 155, 0.90) 86%,
+      rgba(189, 149, 110, 0.30)
     );
-    z-index: 9150;
-    pointer-events: none;
+  }
+  .rsw-border-outer-left,
+  .rsw-border-outer-right {
+    top:    var(--rsw-frame-inset-y, 14px);
+    bottom: var(--infobar-height, 56px);
+    width:  1.5px;
+    background: linear-gradient(
+      180deg,
+      rgba(189, 149, 110, 0.30),
+      rgba(226, 210, 155, 0.90) 14%,
+      rgba(242, 228, 178, 0.96) 50%,
+      rgba(226, 210, 155, 0.90) 86%,
+      rgba(189, 149, 110, 0.30)
+    );
   }
 
-  /* Bottom-right logo — sits above the right end of the info bar */
-  #logo-bottom-bar {
+  .rsw-border-outer-top    { top:    var(--rsw-frame-inset-y, 14px); }
+  .rsw-border-outer-bottom { bottom: var(--infobar-height, 56px); }
+  .rsw-border-outer-left   { left:   var(--rsw-frame-inset-x, 14px); }
+  .rsw-border-outer-right  { right:  var(--rsw-frame-inset-x, 14px); }
+
+  /* inner line — 6 px inside the outer */
+  .rsw-border-inner-top,
+  .rsw-border-inner-bottom {
+    left:   calc(var(--rsw-frame-inset-x, 14px) + 6px);
+    right:  calc(var(--rsw-frame-inset-x, 14px) + 6px);
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      rgba(166, 132, 75, 0.20),
+      rgba(196, 162, 110, 0.72) 14%,
+      rgba(210, 180, 130, 0.80) 50%,
+      rgba(196, 162, 110, 0.72) 86%,
+      rgba(166, 132, 75, 0.20)
+    );
+  }
+  .rsw-border-inner-left,
+  .rsw-border-inner-right {
+    top:    calc(var(--rsw-frame-inset-y, 14px) + 6px);
+    bottom: calc(var(--infobar-height, 56px) + 6px);
+    width:  1px;
+    background: linear-gradient(
+      180deg,
+      rgba(166, 132, 75, 0.20),
+      rgba(196, 162, 110, 0.72) 14%,
+      rgba(210, 180, 130, 0.80) 50%,
+      rgba(196, 162, 110, 0.72) 86%,
+      rgba(166, 132, 75, 0.20)
+    );
+  }
+
+  .rsw-border-inner-top    { top:    calc(var(--rsw-frame-inset-y, 14px) + 6px); }
+  /* 6 px inside (above) the outer bottom border, toward content */
+  .rsw-border-inner-bottom { bottom: calc(var(--infobar-height, 56px) + 6px); }
+  .rsw-border-inner-left   { left:   calc(var(--rsw-frame-inset-x, 14px) + 6px); }
+  .rsw-border-inner-right  { right:  calc(var(--rsw-frame-inset-x, 14px) + 6px); }
+
+  /* ── Diamond ornaments at the midpoint of each side ────────────────────── */
+  .rsw-diamond {
     position: fixed;
-    height: auto;
-    height: 25vh;
-    width: auto;
-    bottom: 0;
-    right: -3vw;
-    z-index: 9200;
+    width: clamp(12px, 0.85vw, 22px);
+    height: clamp(12px, 0.85vw, 22px);
+    background: rgba(232, 214, 158, 0.90);
+    transform: rotate(45deg);
+    box-shadow: 0 0 8px rgba(255, 210, 100, 0.35);
     pointer-events: none;
-    display: block;
+    z-index: 9110;
   }
 
-  #rsw-frame {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 9000;
-}
+  #rsw-diamond-top    {
+    top:  calc(var(--rsw-frame-inset-y, 14px) - clamp(6px, 0.425vw, 11px));
+    left: 50%;
+    transform: translateX(-50%) rotate(45deg);
+  }
+  #rsw-diamond-bottom {
+    bottom: calc(var(--infobar-height, 56px) - clamp(6px, 0.425vw, 11px));
+    left: 50%;
+    transform: translateX(-50%) rotate(45deg);
+  }
+  #rsw-diamond-left {
+    left: calc(var(--rsw-frame-inset-x, 14px) - clamp(6px, 0.425vw, 11px));
+    top:  50%;
+    transform: translateY(-50%) rotate(45deg);
+  }
+  #rsw-diamond-right {
+    right: calc(var(--rsw-frame-inset-x, 14px) - clamp(6px, 0.425vw, 11px));
+    top:   50%;
+    transform: translateY(-50%) rotate(45deg);
+  }
 
-/* Top magical energy line */
-.energy-top {
-  position: absolute;
-  top: 0;
-  left: 10%;
-  width: 80%;
-  height: 4px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    #8b5a12,
-    #ffcc55,
-    #fff2a6,
-    #66b3ff,
-    #8b5a12,
-    transparent
-  );
-  box-shadow:
-    0 0 8px rgba(255,180,60,0.6),
-    0 0 18px rgba(100,170,255,0.4);
-}
+  /* ── Vignette ───────────────────────────────────────────────────────────── */
+  #rsw-vignette {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at center, rgba(246, 201, 104, 0.028), transparent 44%),
+      radial-gradient(circle at center, transparent 66%, rgba(0, 0, 0, 0.20) 100%);
+  }
 
-/* Subtle vertical edge glow */
-.edge {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  opacity: 0.6;
-}
+  /* ── Corner logos / badges ─────────────────────────────────────────────── */
+  .rsw-corner-asset {
+    position: fixed;
+    display: block;
+    height: auto;
+    pointer-events: none;
+    z-index: 9150;
+    filter: drop-shadow(0 14px 22px rgba(0, 0, 0, 0.58));
+  }
 
-.edge.left {
-  left: 0;
-  background: linear-gradient(
-    to bottom,
-    transparent,
-    rgba(255,160,40,0.5),
-    rgba(100,160,255,0.4),
-    transparent
-  );
-  box-shadow: 0 0 12px rgba(255,140,0,0.3);
-}
+  #rsw-badge-left {
+    top:  0;
+    left: 0;
+    width: var(--rsw-badge-left-size, 200px);
+  }
 
-.edge.right {
-  right: 0;
-  background: linear-gradient(
-    to bottom,
-    transparent,
-    rgba(100,160,255,0.4),
-    rgba(255,160,40,0.5),
-    transparent
-  );
-  box-shadow: 0 0 12px rgba(255,140,0,0.3);
-}
+  #rsw-badge-right {
+    top:   0;
+    right: 0;
+    width: var(--rsw-badge-right-size, 178px);
+  }
 
-/* Very subtle arcane corner aura */
-.corner-glow {
-  position: absolute;
-  width: 18vw;
-  height: 18vw;
-  pointer-events: none;
-  opacity: 0.25;
-}
+  #rsw-regio-logo {
+    left:   0;
+    bottom: 0;
+    width: var(--rsw-regio-logo-size, 184px);
+  }
 
-.corner-glow.tl {
-  top: 0;
-  left: 0;
-  background: radial-gradient(
-    circle at top left,
-    rgba(255,200,80,0.6),
-    rgba(100,160,255,0.4),
-    transparent 70%
-  );
-}
+  #rsw-event-logo {
+    right:  0;
+    bottom: 0;
+    width: var(--rsw-event-logo-size, 340px);
+  }
 
-.corner-glow.br {
-  bottom: 0;
-  right: 0;
-  background: radial-gradient(
-    circle at bottom right,
-    rgba(100,160,255,0.5),
-    rgba(255,160,40,0.5),
-    transparent 70%
-  );
-}
 </style>
 
-<div id="rsw-frame">
-  <!--<div class="energy-top"></div>-->
-  <div class="edge left"></div>
-  <div class="edge right"></div>
-  <div class="corner-glow tl"></div>
-  <div class="corner-glow br"></div>
+<div id="rsw-frame-shell" data-hoist>
+  <div class="rsw-border rsw-border-outer-top"></div>
+  <div class="rsw-border rsw-border-outer-bottom"></div>
+  <div class="rsw-border rsw-border-outer-left"></div>
+  <div class="rsw-border rsw-border-outer-right"></div>
+  <div class="rsw-border rsw-border-inner-top"></div>
+  <div class="rsw-border rsw-border-inner-bottom"></div>
+  <div class="rsw-border rsw-border-inner-left"></div>
+  <div class="rsw-border rsw-border-inner-right"></div>
+  <div id="rsw-vignette"></div>
 </div>
 
-<div class="vignette"></div>
-<div id="theme-top-accessory" data-hoist></div>
-<div id="theme-bottom-right-accessory" data-hoist></div>
-<div id="infobar-gold-border" data-hoist></div>
-<img id="logo-bottom-bar" src="/themes/camp/assets/bottom-right-logo.png" alt="" data-hoist>
+<div id="rsw-diamond-top"    class="rsw-diamond" data-hoist></div>
+<div id="rsw-diamond-bottom" class="rsw-diamond" data-hoist></div>
+<div id="rsw-diamond-left"   class="rsw-diamond" data-hoist></div>
+<div id="rsw-diamond-right"  class="rsw-diamond" data-hoist></div>
+<img id="rsw-badge-left"  class="rsw-corner-asset" src="/themes/camp/assets/rsw-badge-left.png"  alt="" data-hoist>
+<img id="rsw-badge-right" class="rsw-corner-asset" src="/themes/camp/assets/rsw-badge-right.png" alt="" data-hoist>
+<img id="rsw-regio-logo"  class="rsw-corner-asset" src="/themes/camp/assets/regio-logo.png"      alt="" data-hoist>
+<img id="rsw-event-logo"  class="rsw-corner-asset" src="/themes/camp/assets/rsw-logo.png"        alt="" data-hoist>

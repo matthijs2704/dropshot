@@ -1,131 +1,166 @@
-/* ─── Camp theme ─────────────────────────────────────────────────────────────
-   Warm rustic campfire aesthetic.
-   All rules use CSS custom properties so default behaviour is preserved when
-   this theme is NOT active (all vars have 0px / transparent fallbacks in the
-   layout files).
+/* ─── RSW 2026 camp theme ──────────────────────────────────────────────────
+   Minimal frame, dark fantasy palette, and generous content area for 4K.
 ──────────────────────────────────────────────────────────────────────────── */
 
-/* ── Google Fonts: Playfair Display (serif heading) + Lato (body) ─────────── */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Lato:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Source+Sans+3:wght@400;600;700&display=swap');
 
 :root {
-  /* ── Layout & tiles ───────────────────────────────────────────────────── */
-  --screen-bg:          #1a1208;         /* deep charcoal-brown */
-  --screen-padding:     16px;            /* inset all layouts from the screen edge */
-  --tile-gap:           6px;
-  --tile-radius:        4px;
-  --tile-shadow:        0 2px 12px rgba(0,0,0,0.6);
-  --tile-border:        2px solid rgba(180,130,60,0.35);
+  /* ── Layout safe area: tight margins just inside the thin frame ─────── */
+  --rsw-frame-inset-x:     clamp(12px, 0.75vw, 28px);
+  --rsw-frame-inset-y:     clamp(12px, 0.8vh, 26px);
+  --rsw-safe-top:          clamp(22px, 1.7vh, 38px);
+  --rsw-safe-right:        clamp(22px, 1.0vw, 38px);
+  --rsw-safe-bottom:       calc(var(--infobar-height, 56px) + 10px);
+  --rsw-safe-left:         clamp(22px, 1.0vw, 38px);
+  --rsw-badge-left-size:   clamp(90px, 10.0vw, 340px);
+  --rsw-badge-right-size:  clamp(80px,  8.4vw, 286px);
+  --rsw-regio-logo-size:   clamp(82px,  8.8vw, 300px);
+  --rsw-event-logo-size:   clamp(150px, 14.5vw, 490px);
 
-  /* ── Polaroid frame ───────────────────────────────────────────────────── */
-  --polaroid-bg:        #1a1208;
-  --polaroid-card-bg:   #f5ead6;         /* aged kraft paper */
-  --polaroid-card-radius: 3px;
-  --polaroid-card-shadow: 0 6px 24px rgba(0,0,0,0.65), 0 1px 3px rgba(0,0,0,0.4);
+  --screen-bg:
+    radial-gradient(1000px 560px at 50% 46%, rgba(255, 196, 84, 0.06), transparent 42%),
+    radial-gradient(920px 500px at 88% 8%, rgba(255, 110, 48, 0.07), transparent 38%),
+    radial-gradient(860px 480px at 14% 88%, rgba(72, 146, 255, 0.06), transparent 40%),
+    linear-gradient(180deg, #101011, #0a0a0c 100%);
+  --screen-padding-top:    var(--rsw-safe-top);
+  --screen-padding-right:  var(--rsw-safe-right);
+  --screen-padding-bottom: var(--rsw-safe-bottom);
+  --screen-padding-left:   var(--rsw-safe-left);
+  --tile-gap:              clamp(6px, 0.45vw, 12px);
+  --tile-radius:           4px;
+  --tile-shadow:           0 8px 22px rgba(0, 0, 0, 0.28);
+  --tile-border:           none;
 
-  /* ── Text-card / QR / Article ─────────────────────────────────────────── */
-  --textcard-bg:         #2b1f0e;        /* dark wood */
-  --textcard-color:      #f0ddb8;        /* warm cream */
-  --textcard-accent:     #c8843a;        /* amber ember */
-  --textcard-font:       'Playfair Display', Georgia, serif;
-  --textcard-title-size: clamp(2.2rem, 5.5vw, 4.8rem);
-  --textcard-body-size:  clamp(1rem, 2.2vw, 1.6rem);
+  /* ── Photo layouts / polaroids ───────────────────────────────────────── */
+  --polaroid-bg:           transparent;
+  --polaroid-card-bg:      #efe3c8;
+  --polaroid-card-radius:  8px;
+  --polaroid-card-shadow:  0 14px 28px rgba(0, 0, 0, 0.34);
 
-  --qr-bg:              #f5ead6;
-  --qr-color:           #2b1f0e;
-  --qr-muted-color:     #7a5c35;
+  /* ── Slides ──────────────────────────────────────────────────────────── */
+  --textcard-bg:           linear-gradient(160deg, rgba(24, 21, 20, 0.96), rgba(13, 13, 15, 0.96));
+  --textcard-color:        #f4ead0;
+  --textcard-accent:       #d8b16a;
+  --textcard-font:         'Cinzel', Georgia, serif;
+  --textcard-title-size:   clamp(2.1rem, 4.1vw, 5rem);
+  --textcard-body-size:    clamp(1rem, 1.55vw, 1.9rem);
 
-  /* ── Ticker ───────────────────────────────────────────────────────────── */
-  --ticker-bg:             rgba(26, 18, 8, 0.92);
-  --ticker-height:         28px;
-  --ticker-color:          #f0ddb8;
-  --ticker-font-size:      17px;
+  --qr-bg:                 rgba(247, 239, 221, 0.98);
+  --qr-color:              #1b1715;
+  --qr-muted-color:        #6f5a39;
+
+  /* ── Ticker / info bar ──────────────────────────────────────────────── */
+  --ticker-bg:             rgba(13, 13, 15, 0.84);
+  --ticker-height:         clamp(28px, 2.2vh, 42px);
+  --ticker-color:          #f4ead0;
+  --ticker-font-size:      clamp(16px, 1.05vw, 24px);
   --ticker-font-weight:    600;
-  --ticker-font-family:    'Lato', 'Segoe UI', system-ui, sans-serif;
+  --ticker-font-family:    'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
   --ticker-letter-spacing: 0.04em;
-  --ticker-radius:         0px;
+  --ticker-radius:         999px;
   --ticker-offset-y:       0px;
-  /* No inset — corner accents (z-index 9000) draw over the ticker naturally */
-  --ticker-inset-x:        0px;
+  --ticker-inset-x:        clamp(18px, 1.4vw, 36px);
 
-  /* ── Info bar ─────────────────────────────────────────────────────────── */
-  --infobar-bg:                   rgba(10, 7, 3, 0.93);
-  --infobar-color:                #f0ddb8;
-  --infobar-height:               60px;
-  --infobar-border-top:           none;  /* replaced by #infobar-gold-border element */
-  --infobar-clock-color:          rgba(240, 221, 184, 0.85);
-  --infobar-event-color:          #f0ddb8;
-  --infobar-countdown-color:      #ffdca8;
-  --infobar-divider-color:        rgba(200, 150, 50, 0.35);
-  /* Push ticker text clear of the bottom-right logo (logo is ~22vw wide) */
-  --infobar-ticker-padding:       0 23vw 0 0;
+  --infobar-bg:                   rgba(8, 8, 10, 0.86);
+  --infobar-color:                #f4ead0;
+  --infobar-height:               56px;
+  --infobar-border-top:           none;
+  --infobar-clock-color:          rgba(244, 234, 208, 0.78);
+  --infobar-event-color:          #f4ead0;
+  --infobar-countdown-color:      #ffd28d;
+  --infobar-divider-color:        rgba(216, 177, 106, 0.24);
+  --infobar-ticker-padding:       0;  /* handled by #overlay-infobar padding below */
 
-  /* ── Corner bug ───────────────────────────────────────────────────────── */
-  --bug-bg:          rgba(26, 18, 8, 0.82);
-  --bug-radius:      5px;
-  --bug-padding:     5px 11px;
-  --bug-color:       #f0ddb8;
-  --bug-font-size:   15px;
-  --bug-font-weight: 700;
-  --bug-font-family: 'Lato', 'Segoe UI', system-ui, sans-serif;
-  /* Nudge bug down enough to clear the corner accent triangle */
-  --bug-offset-top:    20px;
-  --bug-offset-bottom: 0px;
-  --bug-offset-left:   20px;
-  --bug-offset-right:  20px;
+  /* ── Corner bug / QR bug ────────────────────────────────────────────── */
+  --bug-bg:                rgba(10, 10, 12, 0.72);
+  --bug-radius:            999px;
+  --bug-padding:           6px 12px;
+  --bug-color:             #f4ead0;
+  --bug-font-size:         clamp(14px, 0.9vw, 20px);
+  --bug-font-weight:       700;
+  --bug-font-family:       'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
+  --bug-offset-top:        clamp(8px, 1vh, 18px);
+  --bug-offset-bottom:     clamp(8px, 1vh, 18px);
+  --bug-offset-left:       clamp(8px, 1vw, 18px);
+  --bug-offset-right:      clamp(8px, 1vw, 18px);
 
-  /* ── QR bug ───────────────────────────────────────────────────────────── */
-  --qr-bug-bg:               rgba(26, 18, 8, 0.82);
-  --qr-bug-radius:           8px;
+  --qr-bug-bg:               rgba(10, 10, 12, 0.8);
+  --qr-bug-radius:           16px;
   --qr-bug-padding:          10px;
-  --qr-bug-size:             min(10vw, 96px);
-  --qr-bug-label-color:      #f0ddb8;
-  --qr-bug-label-size:       11px;
-  --qr-bug-label-font-family: 'Lato', 'Segoe UI', system-ui, sans-serif;
-  /* Per-edge offsets: 0 — base positions already sit in the mat;
-     corner accents (z-index 9000) draw over naturally */
-  --qr-bug-offset-top:    0px;
-  --qr-bug-offset-bottom: 0px;
-  --qr-bug-offset-left:   0px;
-  --qr-bug-offset-right:  0px;
+  --qr-bug-size:             clamp(84px, 6vw, 142px);
+  --qr-bug-label-color:      #f4ead0;
+  --qr-bug-label-size:       clamp(10px, 0.72vw, 15px);
+  --qr-bug-label-font-family:'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
+  --qr-bug-offset-top:       clamp(8px, 1vh, 18px);
+  --qr-bug-offset-bottom:    clamp(8px, 1vh, 18px);
+  --qr-bug-offset-left:      clamp(8px, 1vw, 18px);
+  --qr-bug-offset-right:     clamp(8px, 1vw, 18px);
 
-  /* ── Alerts ───────────────────────────────────────────────────────────── */
-  --alert-color:            #f6e5c7;
-  --alert-banner-bg:        rgba(34, 22, 10, 0.92);
-  --alert-popup-bg:         rgba(31, 21, 11, 0.94);
-  --alert-countdown-bg:     rgba(28, 18, 8, 0.93);
-  --alert-countdown-time:   #ffcf8b;
-  --alert-banner-border:    rgba(200, 140, 60, 0.35);
-  --alert-popup-border:     rgba(200, 140, 60, 0.4);
-  --alert-countdown-border: rgba(200, 140, 60, 0.35);
-  --alert-title-color:      #ffd490;
-  --alert-urgent-glow:      rgba(255, 160, 40, 0.55);
-  --alert-font-family:      'Lato', sans-serif;
+  /* ── Alerts ──────────────────────────────────────────────────────────── */
+  --alert-color:            #f8efda;
+  --alert-banner-bg:        rgba(16, 15, 16, 0.92);
+  --alert-popup-bg:         rgba(16, 15, 16, 0.95);
+  --alert-countdown-bg:     rgba(16, 15, 16, 0.95);
+  --alert-countdown-time:   #ffd086;
+  --alert-banner-border:    rgba(216, 177, 106, 0.28);
+  --alert-popup-border:     rgba(216, 177, 106, 0.34);
+  --alert-countdown-border: rgba(216, 177, 106, 0.32);
+  --alert-title-color:      #ffd896;
+  --alert-urgent-glow:      rgba(255, 122, 66, 0.34);
+  --alert-font-family:      'Source Sans 3', sans-serif;
 
   /* ── Public submit page ──────────────────────────────────────────────── */
-  --submit-text-color:             #f5ead6;
-  --submit-sub-color:              rgba(245, 234, 214, 0.8);
+  --submit-text-color:            #f6edd8;
+  --submit-sub-color:             rgba(246, 237, 216, 0.78);
   --submit-bg:
-    radial-gradient(1100px 520px at 12% -10%, rgba(200, 132, 58, 0.22), transparent 60%),
-    radial-gradient(900px 440px at 110% 0%, rgba(122, 92, 53, 0.24), transparent 56%),
-    linear-gradient(165deg, #1a1208, #0f0b07 62%);
-  --submit-card-bg:                rgba(26, 18, 8, 0.72);
-  --submit-card-border:            rgba(200, 132, 58, 0.35);
-  --submit-label-color:            rgba(240, 221, 184, 0.84);
-  --submit-input-border:           rgba(200, 132, 58, 0.42);
-  --submit-input-bg:               rgba(20, 14, 8, 0.86);
-  --submit-photo-border:           rgba(200, 132, 58, 0.4);
-  --submit-photo-bg:               rgba(12, 8, 4, 0.4);
-  --submit-btn-text:               #2d1f0f;
-  --submit-btn-bg:                 linear-gradient(135deg, #f0ddb8, #c8843a);
-  --submit-btn-secondary-bg:       rgba(240, 221, 184, 0.14);
-  --submit-btn-secondary-border:   rgba(240, 221, 184, 0.32);
-  --submit-status-color:           rgba(240, 221, 184, 0.9);
+    radial-gradient(1200px 600px at 12% -8%, rgba(255, 124, 59, 0.14), transparent 58%),
+    radial-gradient(980px 620px at 110% 4%, rgba(82, 142, 255, 0.12), transparent 58%),
+    linear-gradient(170deg, #111114, #0a0a0c 72%);
+  --submit-card-bg:               rgba(15, 15, 17, 0.72);
+  --submit-card-border:           rgba(216, 177, 106, 0.24);
+  --submit-label-color:           rgba(246, 237, 216, 0.78);
+  --submit-input-border:          rgba(216, 177, 106, 0.26);
+  --submit-input-bg:              rgba(8, 8, 10, 0.7);
+  --submit-photo-border:          rgba(216, 177, 106, 0.22);
+  --submit-photo-bg:              rgba(255, 255, 255, 0.025);
+  --submit-btn-text:              #171310;
+  --submit-btn-bg:                linear-gradient(135deg, #f1dba6, #d58a4b);
+  --submit-btn-secondary-bg:      rgba(255, 255, 255, 0.06);
+  --submit-btn-secondary-border:  rgba(255, 255, 255, 0.12);
+  --submit-status-color:          rgba(246, 237, 216, 0.9);
 
-  /* ── Submission wall layout ──────────────────────────────────────────── */
-  --submission-wall-bg:            #1a1208;
-  --submission-wall-message-color: #2b1f0e;
-  --submission-wall-meta-color:    #7a5c35;
-  --submission-wall-message-font:  'Playfair Display', Georgia, serif;
-  --submission-wall-meta-font:     'Lato', 'Segoe UI', system-ui, sans-serif;
+  /* ── Submission wall ─────────────────────────────────────────────────── */
+
+  --submission-wall-bg:            transparent;
+
+  --submission-wall-message-color: #231c17;
+  --submission-wall-meta-color:    #715a3a;
+  --submission-wall-message-font:  'Cinzel', Georgia, serif;
+  --submission-wall-meta-font:     'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
+}
+
+/* ── Infobar: pad away from corner logos ─────────────────────────────────
+   The regio logo (bottom-left) and RSW logo (bottom-right) sit at the
+   screen corners and overlap the infobar.  Push the whole infobar content
+   in from both sides so the clock / event / ticker are never hidden.
+   The visible badge art is ~80 % of each image's total width.
+──────────────────────────────────────────────────────────────────────── */
+#overlay-infobar {
+  padding-left:  calc(var(--rsw-regio-logo-size,  100px) + 8px);
+  padding-right: calc(var(--rsw-event-logo-size,  200px) + 8px);
+}
+
+/* ── Submission wall QR bug — keep it clear of the bottom-right RSW logo ──
+   Shift to the left side, just right of the regio logo.
+──────────────────────────────────────────────────────────────────────────── */
+.sw-qr {
+  left:       calc(var(--rsw-regio-logo-size, 184px) + 16px);
+  right:      auto;
+  background: rgba(10, 10, 12, 0.82);
+  border:     1px solid rgba(216, 177, 106, 0.30);
+}
+
+.sw-qr-label {
+  font-family: var(--ticker-font-family, 'Source Sans 3', sans-serif);
+  color: #f4ead0;
 }

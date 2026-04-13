@@ -550,8 +550,8 @@ function sanitizeScreenConfig(input, base) {
       next.preferHeroSide = value === 'left' || value === 'right' ? value : 'auto';
       continue;
     }
-    if (key === 'kenBurnsEnabled') {
-      next.kenBurnsEnabled = Boolean(value);
+    if (key === 'kenBurnsEnabled' || key === 'mosaicGroupSync') {
+      next[key] = Boolean(value);
       continue;
     }
     if (key === 'templateEnabled') {

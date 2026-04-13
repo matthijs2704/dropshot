@@ -65,12 +65,14 @@ function _serializeSubmission(submission) {
   if (!submission) return null;
   return {
     id: submission.id,
+    kind: submission.kind || 'screen',
     message: submission.message,
     submitterValue: submission.submitterValue,
     status: submission.status,
     submittedAt: submission.submittedAt,
     approvedAt: submission.approvedAt,
     rejectedAt: submission.rejectedAt,
+    handledAt: submission.handledAt,
     photoOriginalUrl: submission.photoOriginalUrl,
     photoThumbUrl: submission.photoThumbUrl,
     publishedPhotoId: submission.publishedPhotoId,
@@ -81,9 +83,11 @@ function _serializeForScreen(submission) {
   if (!submission) return null;
   return {
     id: submission.id,
+    kind: 'screen',
     message: submission.message,
     submitterValue: submission.submitterValue,
     submittedAt: submission.submittedAt,
+    approvedAt: submission.approvedAt,
     photoUrl: submission.photoOriginalUrl || null,
     photoThumbUrl: submission.photoThumbUrl || submission.photoOriginalUrl || null,
   };
@@ -149,6 +153,7 @@ publicRouter.get('/public-config', (_req, res) => {
     submissionRequirePhoto: settings.submissionRequirePhoto,
     eventName: settings.eventName,
     publicSubmitUrl: settings.publicSubmitUrl,
+    publicTipUrl: settings.publicTipUrl,
     theme: settings.theme,
   });
 });
@@ -163,14 +168,19 @@ publicRouter.post('/', upload.single('photo'), async (req, res) => {
     return res.status(429).json({ ok: false, error: 'Te veel inzendingen. Probeer het over een paar minuten opnieuw.' });
   }
 
+  const kind = req.body?.kind === 'kampkrant_tip' ? 'kampkrant_tip' : 'screen';
   const message = String(req.body?.message || '').trim().slice(0, 800);
   const submitterValue = String(req.body?.submitterValue || '').trim().slice(0, 120);
 
-  if (settings.submissionRequirePhoto && !req.file) {
+  if (kind === 'screen' && settings.submissionRequirePhoto && !req.file) {
     return res.status(400).json({ ok: false, error: 'Een foto is verplicht voor dit evenement' });
   }
 
-  if (!req.file && !message) {
+  if (kind === 'kampkrant_tip' && !message) {
+    return res.status(400).json({ ok: false, error: 'Schrijf even een tip voor de kampkrant' });
+  }
+
+  if (kind === 'screen' && !req.file && !message) {
     return res.status(400).json({ ok: false, error: 'Voeg een foto of bericht toe' });
   }
 
@@ -180,6 +190,7 @@ publicRouter.post('/', upload.single('photo'), async (req, res) => {
     const photoMeta = await _persistSubmissionPhoto(submissionId, req.file);
     const submission = createSubmission({
       id: submissionId,
+      kind,
       message,
       submitterValue,
       ...photoMeta,
@@ -223,14 +234,14 @@ adminRouter.patch('/:id', async (req, res) => {
     }
 
     const promotedNow = current.status !== 'approved' && updated.status === 'approved';
-    if (promotedNow && updated.photoAssetPath && !updated.publishedPhotoId) {
+    if (promotedNow && updated.kind === 'screen' && updated.photoAssetPath && !updated.publishedPhotoId) {
       const publishedPhotoId = await _publishSubmissionPhoto(updated);
       if (publishedPhotoId) {
         updated = updateSubmission(id, { publishedPhotoId }) || updated;
       }
     }
 
-    if (promotedNow) {
+    if (promotedNow && updated.kind === 'screen') {
       broadcast({ type: 'submission_approved', submission: _serializeForScreen(updated) });
     }
 
@@ -275,7 +286,7 @@ adminRouter.post('/settings', (req, res) => {
 
 adminRouter.get('/approved', (req, res) => {
   const limit = Number(req.query?.limit || 80);
-  const items = listSubmissions({ status: 'approved', limit });
+  const items = listSubmissions({ status: 'approved', kind: 'screen', limit });
   res.json({ ok: true, submissions: items.map(_serializeForScreen) });
 });
 

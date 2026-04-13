@@ -18,6 +18,10 @@ function _sanitizeSubmitterValue(value) {
   return String(value || '').trim().slice(0, 120);
 }
 
+function _sanitizeKind(value) {
+  return value === 'kampkrant_tip' ? 'kampkrant_tip' : 'screen';
+}
+
 function _toInt(value) {
   const num = Number(value);
   return Number.isFinite(num) ? Math.floor(num) : null;
@@ -26,20 +30,26 @@ function _toInt(value) {
 function _normalizeSubmission(entry) {
   const src = entry && typeof entry === 'object' ? entry : {};
   const now = Date.now();
-  const status = src.status === 'approved' || src.status === 'rejected' ? src.status : 'pending';
+  const status = src.status === 'approved' || src.status === 'rejected' || src.status === 'handled'
+    ? src.status
+    : 'pending';
 
   return {
     id: src.id ? String(src.id) : crypto.randomUUID(),
+    kind: _sanitizeKind(src.kind),
     message: _sanitizeMessage(src.message),
     submitterValue: _sanitizeSubmitterValue(src.submitterValue),
     status,
     submittedAt: _toInt(src.submittedAt) || now,
     approvedAt: _toInt(src.approvedAt),
     rejectedAt: _toInt(src.rejectedAt),
+    handledAt: _toInt(src.handledAt),
     photoOriginalUrl: src.photoOriginalUrl ? String(src.photoOriginalUrl) : null,
     photoThumbUrl: src.photoThumbUrl ? String(src.photoThumbUrl) : null,
     photoAssetPath: src.photoAssetPath ? String(src.photoAssetPath) : null,
     publishedPhotoId: src.publishedPhotoId ? String(src.publishedPhotoId) : null,
+    lastWallShownAt: _toInt(src.lastWallShownAt),
+    wallImpressions: Math.max(0, _toInt(src.wallImpressions) || 0),
   };
 }
 
@@ -92,15 +102,20 @@ function getSubmissionSettings() {
     submissionEnabled: cfg.submissionEnabled !== false,
     submissionFieldLabel: String(cfg.submissionFieldLabel || 'Naam'),
     submissionRequirePhoto: Boolean(cfg.submissionRequirePhoto),
+    submissionWallEnabled: cfg.submissionWallEnabled !== false,
     submissionDisplayMode: cfg.submissionDisplayMode || 'both',
     submissionDisplayIntervalSec: Number(cfg.submissionDisplayIntervalSec || 45),
     submissionDisplayDurationSec: Number(cfg.submissionDisplayDurationSec || 12),
     submissionGridCount: Number(cfg.submissionGridCount || 6),
+    submissionWallFreshForMin: Number(cfg.submissionWallFreshForMin || 90),
+    submissionWallRepeatAfterCycles: Number(cfg.submissionWallRepeatAfterCycles || 3),
+    submissionWallMinApproved: Number(cfg.submissionWallMinApproved || 2),
     submissionWallShowQr: cfg.submissionWallShowQr !== false,
     submissionWallHideWhenEmpty: cfg.submissionWallHideWhenEmpty !== false,
     eventName: String(cfg.eventName || ''),
     publicBaseUrl,
-    publicSubmitUrl: publicBaseUrl ? `${publicBaseUrl}/submit` : '',
+    publicSubmitUrl: publicBaseUrl ? `${publicBaseUrl}/submit?kind=screen` : '',
+    publicTipUrl: publicBaseUrl ? `${publicBaseUrl}/submit?kind=kampkrant_tip` : '',
     theme: cfg.theme || null,
   };
 }
@@ -114,11 +129,16 @@ function updateSubmissionSettings(patch) {
 
 function listSubmissions(options = {}) {
   const status = options.status ? String(options.status) : null;
+  const kind = options.kind ? _sanitizeKind(options.kind) : null;
   const limit = Number(options.limit);
   let items = _list().map(_normalizeSubmission);
 
-  if (status === 'pending' || status === 'approved' || status === 'rejected') {
+  if (status === 'pending' || status === 'approved' || status === 'rejected' || status === 'handled') {
     items = items.filter(item => item.status === status);
+  }
+
+  if (kind) {
+    items = items.filter(item => item.kind === kind);
   }
 
   items.sort((a, b) => (b.submittedAt || 0) - (a.submittedAt || 0));
@@ -141,6 +161,7 @@ function getSubmissionById(id) {
 function createSubmission(input = {}) {
   const submission = _normalizeSubmission({
     id: input.id || crypto.randomUUID(),
+    kind: input.kind,
     message: input.message,
     submitterValue: input.submitterValue,
     status: 'pending',
@@ -149,6 +170,8 @@ function createSubmission(input = {}) {
     photoThumbUrl: input.photoThumbUrl || null,
     photoAssetPath: input.photoAssetPath || null,
     publishedPhotoId: null,
+    lastWallShownAt: null,
+    wallImpressions: 0,
   });
 
   _submissions.push(submission);
@@ -168,27 +191,48 @@ function updateSubmission(id, patch = {}) {
     next.message = _sanitizeMessage(patch.message);
   }
 
+  if (Object.prototype.hasOwnProperty.call(patch, 'kind')) {
+    next.kind = _sanitizeKind(patch.kind);
+  }
+
   if (Object.prototype.hasOwnProperty.call(patch, 'submitterValue')) {
     next.submitterValue = _sanitizeSubmitterValue(patch.submitterValue);
   }
 
   if (Object.prototype.hasOwnProperty.call(patch, 'status')) {
-    const status = patch.status === 'approved' || patch.status === 'rejected' ? patch.status : 'pending';
+    const status = patch.status === 'approved' || patch.status === 'rejected' || patch.status === 'handled'
+      ? patch.status
+      : 'pending';
     next.status = status;
     if (status === 'approved') {
       next.approvedAt = now;
       next.rejectedAt = null;
+      next.handledAt = null;
     } else if (status === 'rejected') {
       next.rejectedAt = now;
       next.approvedAt = null;
+      next.handledAt = null;
+    } else if (status === 'handled') {
+      next.handledAt = now;
+      next.approvedAt = null;
+      next.rejectedAt = null;
     } else {
       next.approvedAt = null;
       next.rejectedAt = null;
+      next.handledAt = null;
     }
   }
 
   if (Object.prototype.hasOwnProperty.call(patch, 'publishedPhotoId')) {
     next.publishedPhotoId = patch.publishedPhotoId ? String(patch.publishedPhotoId) : null;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'lastWallShownAt')) {
+    next.lastWallShownAt = _toInt(patch.lastWallShownAt);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'wallImpressions')) {
+    next.wallImpressions = Math.max(0, _toInt(patch.wallImpressions) || 0);
   }
 
   _submissions[idx] = next;
@@ -207,7 +251,7 @@ function deleteSubmission(id) {
 function getApprovedSubmissions(limit = 40) {
   const max = Math.max(1, Math.min(200, Math.floor(Number(limit) || 40)));
   return _list()
-    .filter(item => item.status === 'approved')
+    .filter(item => item.status === 'approved' && _sanitizeKind(item.kind) === 'screen')
     .sort((a, b) => (b.approvedAt || b.submittedAt || 0) - (a.approvedAt || a.submittedAt || 0))
     .slice(0, max)
     .map(_normalizeSubmission);

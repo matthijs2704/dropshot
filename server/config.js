@@ -170,10 +170,14 @@ function defaultConfig() {
     submissionEnabled: true,
     submissionFieldLabel: 'Naam',
     submissionRequirePhoto: false,
+    submissionWallEnabled: true,
     submissionDisplayMode: 'both',
     submissionDisplayIntervalSec: 45,
     submissionDisplayDurationSec: 12,
     submissionGridCount: 6,
+    submissionWallFreshForMin: 90,
+    submissionWallRepeatAfterCycles: 3,
+    submissionWallMinApproved: 2,
     submissionWallShowQr: true,
     submissionWallHideWhenEmpty: true,
   };
@@ -354,23 +358,33 @@ function _sanitizeSubmissionEntry(entry) {
   const id = typeof src.id === 'string' && src.id ? src.id : '';
   if (!id) return null;
 
-  const status = src.status === 'approved' || src.status === 'rejected' ? src.status : 'pending';
+  const status = src.status === 'approved' || src.status === 'rejected' || src.status === 'handled'
+    ? src.status
+    : 'pending';
+  const kind = src.kind === 'kampkrant_tip' ? 'kampkrant_tip' : 'screen';
   const submittedAt = Number(src.submittedAt);
   const approvedAt = Number(src.approvedAt);
   const rejectedAt = Number(src.rejectedAt);
+  const handledAt = Number(src.handledAt);
+  const lastWallShownAt = Number(src.lastWallShownAt);
+  const wallImpressions = Number(src.wallImpressions);
 
   return {
     id,
+    kind,
     message: String(src.message || '').slice(0, 800),
     submitterValue: String(src.submitterValue || '').slice(0, 120),
     status,
     submittedAt: Number.isFinite(submittedAt) ? Math.floor(submittedAt) : Date.now(),
     approvedAt: Number.isFinite(approvedAt) ? Math.floor(approvedAt) : null,
     rejectedAt: Number.isFinite(rejectedAt) ? Math.floor(rejectedAt) : null,
+    handledAt: Number.isFinite(handledAt) ? Math.floor(handledAt) : null,
     photoOriginalUrl: src.photoOriginalUrl ? String(src.photoOriginalUrl) : null,
     photoThumbUrl: src.photoThumbUrl ? String(src.photoThumbUrl) : null,
     photoAssetPath: src.photoAssetPath ? String(src.photoAssetPath) : null,
     publishedPhotoId: src.publishedPhotoId ? String(src.publishedPhotoId) : null,
+    lastWallShownAt: Number.isFinite(lastWallShownAt) ? Math.floor(lastWallShownAt) : null,
+    wallImpressions: Number.isFinite(wallImpressions) ? Math.max(0, Math.floor(wallImpressions)) : 0,
   };
 }
 
@@ -403,6 +417,10 @@ function _sanitizeSubmissionSettings(input, target) {
     target.submissionRequirePhoto = Boolean(input.submissionRequirePhoto);
   }
 
+  if (Object.prototype.hasOwnProperty.call(input, 'submissionWallEnabled')) {
+    target.submissionWallEnabled = Boolean(input.submissionWallEnabled);
+  }
+
   if (Object.prototype.hasOwnProperty.call(input, 'submissionDisplayMode')) {
     const mode = String(input.submissionDisplayMode || '').trim();
     target.submissionDisplayMode = SUBMISSION_DISPLAY_MODES.has(mode) ? mode : 'both';
@@ -426,6 +444,27 @@ function _sanitizeSubmissionSettings(input, target) {
     const val = Number(input.submissionGridCount);
     if (Number.isFinite(val)) {
       target.submissionGridCount = Math.max(3, Math.min(12, Math.floor(val)));
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'submissionWallFreshForMin')) {
+    const val = Number(input.submissionWallFreshForMin);
+    if (Number.isFinite(val)) {
+      target.submissionWallFreshForMin = Math.max(5, Math.min(24 * 60, Math.floor(val)));
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'submissionWallRepeatAfterCycles')) {
+    const val = Number(input.submissionWallRepeatAfterCycles);
+    if (Number.isFinite(val)) {
+      target.submissionWallRepeatAfterCycles = Math.max(0, Math.min(20, Math.floor(val)));
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'submissionWallMinApproved')) {
+    const val = Number(input.submissionWallMinApproved);
+    if (Number.isFinite(val)) {
+      target.submissionWallMinApproved = Math.max(1, Math.min(20, Math.floor(val)));
     }
   }
 

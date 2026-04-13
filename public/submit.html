@@ -11,12 +11,22 @@
 <body>
   <div class="wrap">
     <h1 class="title" id="event-title">Deel jouw moment</h1>
-    <p class="sub">Upload een foto of bericht voor de live event muur. Inzendingen worden beoordeeld voordat ze verschijnen.</p>
+    <p class="sub" id="submit-sub">Kies hieronder of je iets voor het scherm wilt delen of een tip voor de kampkrant wilt insturen.</p>
 
     <div class="card" id="submit-card">
       <form id="submit-form">
         <div class="row">
-          <label for="message">Bericht (optioneel)</label>
+          <div class="mode-switch" role="tablist" aria-label="Kies wat je wilt insturen">
+            <button type="button" class="mode-btn" id="kind-screen" data-kind="screen">Voor op het scherm</button>
+            <button type="button" class="mode-btn" id="kind-tip" data-kind="kampkrant_tip">Tip voor kampkrant</button>
+          </div>
+          <div class="mode-note" id="mode-note">
+            Deel een foto of kort bericht. Na moderatie kan het op het scherm verschijnen.
+          </div>
+        </div>
+
+        <div class="row">
+          <label for="message" id="message-label">Bericht (optioneel)</label>
           <textarea id="message" name="message" maxlength="800" placeholder="Schrijf een kort bericht..."></textarea>
         </div>
 
@@ -26,16 +36,17 @@
         </div>
 
         <div class="row">
-          <label for="photo">Foto</label>
+          <label for="photo" id="photo-label">Foto</label>
           <div class="photo-row photo-box">
             <input id="photo" name="photo" type="file" accept="image/*">
             <button type="button" id="clear-photo" class="btn btn-secondary hidden">Foto verwijderen</button>
           </div>
+          <div class="submit-hint" id="photo-hint">Voeg een foto toe als je wilt.</div>
           <img id="photo-preview" class="photo-preview" alt="Preview">
         </div>
 
         <div class="row submit-actions" style="width: 100%; margin-top: 2rem;">
-          <button id="submit-btn" class="btn" type="submit" style="width: 100%">Versturen</button>
+          <button id="submit-btn" class="btn" type="submit" style="width: 100%">Insturen voor scherm</button>
         </div>
       </form>
 
@@ -43,7 +54,7 @@
     </div>
 
     <div id="closed-message" class="card hidden">
-      Je kunt op dit moment geen foto's insturen.
+      Je kunt op dit moment geen inzendingen insturen.
     </div>
   </div>
 

@@ -364,7 +364,13 @@ async function handleMessage(msg) {
       break;
 
     case 'reload':
-      setTimeout(() => location.reload(), msg.delayMs ?? 1500);
+      setTimeout(async () => {
+        try {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+        } catch {}
+        location.reload();
+      }, msg.delayMs ?? 1500);
       break;
 
     case 'schedule_update':

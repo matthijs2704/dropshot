@@ -312,32 +312,35 @@ async function runCycle() {
 
       if (!layoutDesc?.postMount || !slotEls || signal.aborted) return;
 
-      try {
-        const newIds = await layoutDesc.postMount({
-          slotEls,
-          cfg,
-          cycleStart,
-          visibleIds,
-          signal,
-          pickMorePhotos: (count, options = {}) =>
-            pickPhotos(
-              count,
-              cfg,
-              [...visibleIds, ...(options.excludeIds || [])],
-              false,
-              {
-                avoidRecentMs: cfg.layoutDuration || DEFAULT_LAYOUT_DUR_MS,
-                orientation: options.orientation || 'any',
-                enforceOrientation: options.enforceOrientation,
-                orientationBoost: options.orientationBoost,
-              },
-            ),
-        });
-
+      // Fire postMount as a background task so onDidShow returns immediately.
+      // This lets showRenderable complete right after the transition, so
+      // _scheduleCycle(duration) fires at the correct baseline — giving the
+      // layout exactly `duration` ms on screen with swaps running inside that
+      // window instead of extending it.
+      layoutDesc.postMount({
+        slotEls,
+        cfg,
+        cycleStart,
+        visibleIds,
+        signal,
+        pickMorePhotos: (count, options = {}) =>
+          pickPhotos(
+            count,
+            cfg,
+            [...visibleIds, ...(options.excludeIds || [])],
+            false,
+            {
+              avoidRecentMs: cfg.layoutDuration || DEFAULT_LAYOUT_DUR_MS,
+              orientation: options.orientation || 'any',
+              enforceOrientation: options.enforceOrientation,
+              orientationBoost: options.orientationBoost,
+            },
+          ),
+      }).then(newIds => {
         if (!signal.aborted && newIds?.length) {
           displayState.visibleIds = [...new Set([...displayState.visibleIds, ...newIds])];
         }
-      } catch {}
+      }).catch(() => {});
     },
     destroy: built.destroy || null,
   }, transType, transMs);

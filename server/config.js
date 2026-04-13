@@ -42,6 +42,8 @@ function defaultScreenConfig() {
     mosaicSwapRounds: 1,
     mosaicSwapCount: 2,
     mosaicSwapDelay: 2200,
+    mosaicMinDwellMs: 3000,
+    mosaicGroupSync: false,
     cinematicWeight: 65,
     dynamicWeight: 25,
     neutralWeight: 10,
@@ -202,6 +204,8 @@ const SCREEN_CONFIG_KEYS = new Set([
   'mosaicSwapRounds',
   'mosaicSwapCount',
   'mosaicSwapDelay',
+  'mosaicMinDwellMs',
+  'mosaicGroupSync',
   'cinematicWeight',
   'dynamicWeight',
   'neutralWeight',
@@ -610,8 +614,10 @@ function sanitizeScreenConfig(input, base) {
   next.transitionTime = Math.max(200, Math.min(3000, Math.floor(next.transitionTime)));
   next.groupMixPct = Math.max(0, Math.min(80, Math.floor(next.groupMixPct)));
   next.mosaicSwapRounds = Math.max(0, Math.min(4, Math.floor(next.mosaicSwapRounds)));
-  next.mosaicSwapCount = Math.max(1, Math.min(6, Math.floor(next.mosaicSwapCount)));
+  next.mosaicSwapCount = Math.max(1, Math.min(12, Math.floor(next.mosaicSwapCount)));
   next.mosaicSwapDelay = Math.max(700, Math.min(8000, Math.floor(next.mosaicSwapDelay)));
+  next.mosaicMinDwellMs = Math.max(500, Math.min(30000, Math.floor(next.mosaicMinDwellMs)));
+  next.mosaicGroupSync = Boolean(next.mosaicGroupSync);
   next.cinematicWeight = Math.max(0, Math.min(100, Math.floor(next.cinematicWeight)));
   next.dynamicWeight = Math.max(0, Math.min(100, Math.floor(next.dynamicWeight)));
   next.neutralWeight = Math.max(0, Math.min(100, Math.floor(next.neutralWeight)));

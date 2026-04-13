@@ -192,6 +192,7 @@ export function buildMosaic(templateName, heroPhoto, otherPhotos, minTilePx, cfg
       slot.dataset.isRecent    = slotDef.recent   ? '1' : '0';
       slot.dataset.preferThumb = preferThumb      ? '1' : '0';
       slot.dataset.portrait    = slotDef.portrait ? '1' : '0';
+      slot.dataset.shownAt     = String(Date.now());
       visibleIds.push(photo.id);
       if (slotDef.hero) heroImg = img;
     } else {
@@ -224,11 +225,13 @@ export function buildMosaic(templateName, heroPhoto, otherPhotos, minTilePx, cfg
  * @returns {Promise<string[]>} New visible IDs after swaps
  */
 export async function runMosaicTransitions(slotEls, cfg, cycleStart, pickMorePhotos, signal) {
-  const rounds       = cfg.mosaicSwapRounds ?? 1;
-  const swapCount    = cfg.mosaicSwapCount  ?? 2;
-  const layoutDur    = cfg.layoutDuration   || 8000;
-  const transitionMs = cfg.transitionTime   || 800;
-  const staggerMs    = cfg.swapStaggerMs    ?? 140;
+  const rounds       = cfg.mosaicSwapRounds  ?? 1;
+  const swapCount    = cfg.mosaicSwapCount   ?? 2;
+  const layoutDur    = cfg.layoutDuration    || 8000;
+  const transitionMs = cfg.transitionTime    || 800;
+  const staggerMs    = cfg.swapStaggerMs     ?? 140;
+  const minDwellMs   = cfg.mosaicMinDwellMs  ?? 3000;
+  const groupSync    = Boolean(cfg.mosaicGroupSync);
 
   // Tile fade duration: 70% of layout transition, capped at 700ms
   const fadeDuration = Math.min(Math.round(transitionMs * 0.70), 700);
@@ -256,13 +259,24 @@ export async function runMosaicTransitions(slotEls, cfg, cycleStart, pickMorePho
     const canContinue = await _delay(waitMs, signal);
     if (!canContinue) break;
 
-    // Pick swappable slots (non-hero only, must have an image)
-    const swappable = slotEls.filter(s => s.dataset.isHero !== '1' && s.querySelector('img'));
+    const now = Date.now();
+
+    // Pick swappable slots: non-hero, has image, and has been on screen long enough
+    const swappable = slotEls.filter(s =>
+      s.dataset.isHero !== '1' &&
+      s.querySelector('img') &&
+      (now - Number(s.dataset.shownAt || 0)) >= minDwellMs,
+    );
     if (!swappable.length) break;
 
-    // Shuffle and take up to swapCount
-    const targets = shuffle(swappable)
-      .slice(0, Math.min(swapCount, swappable.length));
+    // groupSync: change ALL swappable slots (no count limit)
+    // normal mode: shuffle and take up to swapCount
+    // Both modes respect swapStaggerMs between individual tile fades
+    const targets = groupSync
+      ? swappable
+      : shuffle(swappable).slice(0, Math.min(swapCount, swappable.length));
+
+    const effectiveStagger = staggerMs;
 
     for (let i = 0; i < targets.length; i++) {
       if (signal?.aborted) break;
@@ -286,13 +300,13 @@ export async function runMosaicTransitions(slotEls, cfg, cycleStart, pickMorePho
       if (!photo) continue;
       reservedIds.add(photo.id);
 
-      const delayed = await _delay(i === 0 ? 0 : staggerMs, signal);
+      const delayed = await _delay(i === 0 ? 0 : effectiveStagger, signal);
       if (!delayed || !slot.isConnected) continue;
 
-      // Slot may have been reused while awaiting stagger.
       if (signal?.aborted) break;
       try {
         crossFadeSlot(slot, photo, fadeDuration);
+        slot.dataset.shownAt = String(Date.now());
         newIds.push(photo.id);
       } catch {}
     }

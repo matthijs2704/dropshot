@@ -192,7 +192,6 @@ export function buildMosaic(templateName, heroPhoto, otherPhotos, minTilePx, cfg
       slot.dataset.isRecent    = slotDef.recent   ? '1' : '0';
       slot.dataset.preferThumb = preferThumb      ? '1' : '0';
       slot.dataset.portrait    = slotDef.portrait ? '1' : '0';
-      slot.dataset.shownAt     = String(Date.now());
       visibleIds.push(photo.id);
       if (slotDef.hero) heroImg = img;
     } else {
@@ -236,17 +235,16 @@ export async function runMosaicTransitions(slotEls, cfg, cycleStart, pickMorePho
   // Tile fade duration: 70% of layout transition, capped at 700ms
   const fadeDuration = Math.min(Math.round(transitionMs * 0.70), 700);
 
-  // First swap fires after the layout transition settles AND tiles have met their
-  // minimum dwell time — whichever is later.  This prevents a minDwellMs > settleMs
-  // situation where rounds fire but every tile fails the dwell check.
-  const settleMs    = transitionMs + 200;
-  const firstSwapMs = Math.max(settleMs, minDwellMs);
+  // This function is called from onDidShow, so tiles are now fully visible.
+  // Stamp shownAt here (visible time) so minDwellMs is measured from when
+  // tiles actually appear on screen, not from the earlier build/cycleStart time.
+  const visibleAt = Date.now();
+  slotEls.forEach(s => { if (s.dataset.photoId) s.dataset.shownAt = String(visibleAt); });
 
-  // Space rounds evenly across the usable window (after first swap, before next cycle).
-  // Reserve the last 1.5 s before next cycle as quiet time so no swap is mid-fade
-  // when the next layout transition fires.
-  const usableWindow  = layoutDur - firstSwapMs - 1500;
-  const roundInterval = rounds > 1 ? Math.floor(usableWindow / rounds) : usableWindow;
+  // Space rounds evenly across the usable window (minDwellMs…cycle end - 1.5s quiet).
+  // cycleStart is used only to know when the cycle ends.
+  const usableMs      = Math.max(0, cycleStart + layoutDur - visibleAt - minDwellMs - 1500 - fadeDuration);
+  const roundInterval = rounds > 1 ? Math.floor(usableMs / rounds) : usableMs;
 
   const newIds = [];
   const reservedIds = new Set(slotEls.map(s => s.dataset.photoId).filter(Boolean));
@@ -254,10 +252,9 @@ export async function runMosaicTransitions(slotEls, cfg, cycleStart, pickMorePho
   for (let round = 0; round < rounds; round++) {
     if (signal?.aborted) break;
 
-    // When should this round fire, measured from cycleStart?
-    const targetMs = firstSwapMs + round * roundInterval;
-    const elapsed  = Date.now() - cycleStart;
-    const waitMs   = Math.max(0, targetMs - elapsed);
+    // Fire each round at minDwellMs + spacing, measured from visibleAt
+    const targetMs = minDwellMs + round * roundInterval;
+    const waitMs   = Math.max(0, targetMs - (Date.now() - visibleAt));
 
     const canContinue = await _delay(waitMs, signal);
     if (!canContinue) break;

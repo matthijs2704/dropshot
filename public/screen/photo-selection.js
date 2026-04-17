@@ -35,23 +35,40 @@ const PORTRAIT_IN_LANDSCAPE_PENALTY = 0.6;  // fit penalty for portrait photos i
 // Group filtering
 // ---------------------------------------------------------------------------
 
-function _getReadyPhotos(cfg) {
+function _photoGroup(photo) {
+  return photo?.eventGroup || 'ungrouped';
+}
+
+function _hiddenGroupSet(cfg) {
+  return new Set(Array.isArray(cfg?.hiddenGroups) ? cfg.hiddenGroups : []);
+}
+
+export function getReadyPhotoPool(cfg) {
   const all = Array.from(photoRegistry.values()).filter(p => p.status === 'ready');
   if (!all.length) return [];
 
-  const groupMode   = cfg.groupMode  || 'auto';
-  const activeGroup = cfg.activeGroup || 'ungrouped';
-  const mixPct      = cfg.groupMixPct ?? 20;
+  const groupMode    = cfg.groupMode  || 'auto';
+  const activeGroup  = cfg.activeGroup || 'ungrouped';
+  const hiddenGroups = _hiddenGroupSet(cfg);
+  const mixPct       = cfg.groupMixPct ?? 20;
 
   if (groupMode === 'manual') {
-    const inGroup  = all.filter(p => p.eventGroup === activeGroup);
-    const outGroup = all.filter(p => p.eventGroup !== activeGroup);
-    if (!inGroup.length) return all;
-    const mixCount = Math.round(all.length * (mixPct / 100));
+    const visible = all.filter(p => {
+      const group = _photoGroup(p);
+      return group === activeGroup || !hiddenGroups.has(group);
+    });
+    const inGroup  = all.filter(p => _photoGroup(p) === activeGroup);
+    const outGroup = visible.filter(p => _photoGroup(p) !== activeGroup);
+    if (!inGroup.length) return visible;
+    const mixCount = Math.round(visible.length * (mixPct / 100));
     return [...inGroup, ...shuffle(outGroup).slice(0, mixCount)];
   }
 
-  return all;
+  return all.filter(p => !hiddenGroups.has(_photoGroup(p)));
+}
+
+export function getReadyPhotoPoolSize(cfg) {
+  return getReadyPhotoPool(cfg).length;
 }
 
 // ---------------------------------------------------------------------------
@@ -196,7 +213,7 @@ function _failsOrientationFilter(photo, orientation, enforce) {
  * @returns {Object[]}
  */
 export function pickPhotos(count, cfg, excludeIds = [], hardExcludeOtherScreen = false, options = {}) {
-  const pool = _getReadyPhotos(cfg);
+  const pool = getReadyPhotoPool(cfg);
   if (!pool.length) return [];
 
   const orientation = options.orientation || 'any';
@@ -319,7 +336,7 @@ export function markAsHeroShown(photoId) {
  * @returns {Object|null}
  */
 export function pickHeroPhoto(cfg, heroLocks, myScreenId, options = {}) {
-  const pool = _getReadyPhotos(cfg);
+  const pool = getReadyPhotoPool(cfg);
   if (!pool.length) return null;
 
   const orientation = options.orientation || 'any';
@@ -383,7 +400,7 @@ export function pickHeroPhoto(cfg, heroLocks, myScreenId, options = {}) {
  * @returns {Object[]}
  */
 export function pickNewestPhotos(count, cfg, excludeIds = [], options = {}) {
-  const pool      = _getReadyPhotos(cfg);
+  const pool      = getReadyPhotoPool(cfg);
   const excludeSet = new Set(excludeIds);
   const orientation = options.orientation || 'any';
   const enforceOrientation = options.enforceOrientation !== false;

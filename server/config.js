@@ -38,6 +38,7 @@ function defaultScreenConfig() {
     transition: 'fade',
     groupMode: 'auto',
     activeGroup: 'ungrouped',
+    hiddenGroups: [],
     groupMixPct: 20,
     mosaicSwapRounds: 1,
     mosaicSwapCount: 2,
@@ -230,6 +231,7 @@ const SCREEN_CONFIG_SCHEMA = {
   // Grouping
   groupMode:               { type: 'enum',        values: ['auto','manual'] },
   activeGroup:             { type: 'string',      default: 'ungrouped' },
+  hiddenGroups:            { type: 'special' },  // sanitized after main loop
   groupMixPct:             { type: 'number',      min: 0,     max: 80    },
   // Mosaic rhythm
   mosaicSwapRounds:        { type: 'number',      min: 0,     max: 4     },
@@ -610,6 +612,16 @@ function sanitizeScreenConfig(input, base) {
       .filter(Boolean)
       .slice(0, 50)
       .map(v => v.slice(0, 500));
+  }
+
+  if (Object.prototype.hasOwnProperty.call(src, 'hiddenGroups')) {
+    const groups = Array.isArray(src.hiddenGroups) ? src.hiddenGroups : [];
+    next.hiddenGroups = [...new Set(
+      groups
+        .map(v => String(v ?? '').trim())
+        .filter(v => v && !/[\\/]/.test(v))
+        .slice(0, 100),
+    )];
   }
 
   // Legacy migration: infoBarShowEvent → both new flags

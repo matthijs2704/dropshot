@@ -36,6 +36,7 @@ export function updateGroups(groups) {
   _groups = groups;
   // Refresh group dropdowns if rendered
   _refreshGroupSelects();
+  _refreshGroupVisibilityToggles();
 }
 
 export function refreshFromConfig() {
@@ -128,6 +129,7 @@ function _buildScreenForm(screenKey, cfg) {
       ${_select(screenKey, 'groupMode', 'Group playback mode',
           [['auto','Auto (all groups)'],['manual','Manual (pin to one group)']], s.groupMode || 'auto')}
       ${_groupSelect(screenKey, s.activeGroup || 'ungrouped')}
+      ${_groupVisibility(screenKey, s.hiddenGroups || [])}
       ${_range(screenKey, 'groupMixPct', 'Cross-group mix', 0, 80, 5, s.groupMixPct ?? 20, v => v+'%')}
     </details>
 
@@ -187,6 +189,10 @@ function _bindFormEvents() {
       const { screen, key } = el.dataset;
       let val = el.value;
       _setConfigValue(screen, key, val);
+      if (key === 'activeGroup' || key === 'groupMode') {
+        _refreshGroupSelects();
+        _refreshGroupVisibilityToggles();
+      }
     });
   });
 
@@ -197,7 +203,7 @@ function _bindFormEvents() {
     });
   });
 
-  container.querySelectorAll('.adv-toggle[data-screen]').forEach(el => {
+  container.querySelectorAll('.adv-toggle[data-screen][data-key][data-value]').forEach(el => {
     el.addEventListener('click', () => {
       const { screen, key, value } = el.dataset;
       el.classList.toggle('on');
@@ -222,6 +228,37 @@ function _bindFormEvents() {
       if (_onChanged) _onChanged();
     });
   });
+
+  container.querySelectorAll('[data-group-visibility-toggle]').forEach(el => {
+    el.addEventListener('click', () => {
+      const { screen, group } = el.dataset;
+      const cfg = _getConfig();
+      const screens = _selectedScreen === 'all' ? _activeScreenIds(cfg) : [screen];
+
+      for (const sk of screens) {
+        const screenCfg = cfg.screens[sk];
+        const hidden    = new Set(Array.isArray(screenCfg?.hiddenGroups) ? screenCfg.hiddenGroups : []);
+        if (hidden.has(group)) hidden.delete(group);
+        else hidden.add(group);
+
+        if (screenCfg.groupMode === 'manual' && screenCfg.activeGroup === group) {
+          hidden.delete(group);
+        }
+
+        screenCfg.hiddenGroups = [...hidden];
+      }
+
+      if (_selectedScreen === 'all') {
+        const linkedIds = _activeScreenIds(cfg).filter(id => id !== '1');
+        for (const id of linkedIds) {
+          cfg.screens[id] = deriveLinkedScreenConfig(cfg.screens['1'], id);
+        }
+      }
+
+      _refreshGroupVisibilityToggles();
+      if (_onChanged) _onChanged();
+    });
+  });
 }
 
 function _setConfigValue(screen, key, val) {
@@ -229,6 +266,10 @@ function _setConfigValue(screen, key, val) {
   const screens = _selectedScreen === 'all' ? _activeScreenIds(cfg) : [screen];
   for (const sk of screens) {
     cfg.screens[sk][key] = val;
+    if (key === 'activeGroup') {
+      cfg.screens[sk].hiddenGroups = (Array.isArray(cfg.screens[sk].hiddenGroups) ? cfg.screens[sk].hiddenGroups : [])
+        .filter(group => group !== val);
+    }
   }
   if (_selectedScreen === 'all') {
     const linkedIds = _activeScreenIds(cfg).filter(id => id !== '1');
@@ -247,6 +288,16 @@ function _refreshGroupSelects() {
     sel.innerHTML = _groups.map(g =>
       `<option value="${esc(g)}" ${current === g ? 'selected' : ''}>${esc(g)}</option>`
     ).join('');
+  });
+}
+
+function _refreshGroupVisibilityToggles() {
+  document.querySelectorAll('[data-group-visibility-toggle]').forEach(btn => {
+    const screen = btn.dataset.screen;
+    const group  = btn.dataset.group;
+    const cfg    = _getConfig();
+    const hidden = new Set(Array.isArray(cfg?.screens?.[screen]?.hiddenGroups) ? cfg.screens[screen].hiddenGroups : []);
+    btn.classList.toggle('on', !hidden.has(group));
   });
 }
 
@@ -332,6 +383,20 @@ function _groupSelect(screen, current) {
     </div>`;
 }
 
+function _groupVisibility(screen, hiddenGroups) {
+  const hidden = new Set(Array.isArray(hiddenGroups) ? hiddenGroups : []);
+  const buttons = _groups.map(group => `
+    <button type="button" class="adv-toggle ${hidden.has(group) ? '' : 'on'}"
+      data-screen="${screen}" data-group="${esc(group)}" data-group-visibility-toggle="1">${esc(group)}</button>
+  `).join('');
+
+  return `
+    <div class="adv-field">
+      <label>Shown groups<span class="adv-hint">Hidden groups are skipped unless the screen is manually focused on that group.</span></label>
+      <div class="adv-toggle-group">${buttons}</div>
+    </div>`;
+}
+
 /**
  * Apply safe fallback to both screens.
  */
@@ -362,5 +427,3 @@ export function applySafeFallback(getConfig, onChanged) {
   }
   if (onChanged) onChanged();
 }
-
-

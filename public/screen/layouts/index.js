@@ -7,7 +7,7 @@ import {
   pickPhotos,
   pickHeroPhoto,
   markAsHeroShown,
-  photoRegistry,
+  getReadyPhotoPoolSize,
 } from '../photos.js';
 import {
   getSubmissionWallState,
@@ -162,11 +162,7 @@ export function stopCycle() {
 // ---------------------------------------------------------------------------
 
 function _readyPoolSize(cfg) {
-  const groupMode   = cfg.groupMode   || 'auto';
-  const activeGroup = cfg.activeGroup || 'ungrouped';
-  const all = Array.from(photoRegistry.values()).filter(p => p.status === 'ready');
-  if (groupMode !== 'manual') return all.length;
-  return all.filter(p => p.eventGroup === activeGroup).length || all.length;
+  return getReadyPhotoPoolSize(cfg);
 }
 
 // ---------------------------------------------------------------------------

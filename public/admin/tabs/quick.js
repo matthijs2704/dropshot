@@ -25,6 +25,7 @@ export function initQuickTab(getConfig, onChanged, onAutoSave) {
 export function updateGroups(groups) {
   _groups = groups;
   _refreshGroupSelector();
+  _renderGroupVisibility();
 }
 
 export function refreshFromConfig() {
@@ -41,6 +42,7 @@ export function refreshFromConfig() {
   if (kbEl) kbEl.checked = cfg.kenBurnsEnabled !== false;
 
   _refreshGroupSelector();
+  _renderGroupVisibility();
 }
 
 // ---------------------------------------------------------------------------
@@ -96,8 +98,36 @@ function _bindControls() {
         } else {
           screenCfg.groupMode = 'manual';
           screenCfg.activeGroup = val;
+          screenCfg.hiddenGroups = _removeHiddenGroup(screenCfg.hiddenGroups, val);
         }
       }
+      _renderGroupVisibility();
+      _notify();
+    });
+  }
+
+  const visibilityEl = document.getElementById('q-group-visibility');
+  if (visibilityEl) {
+    visibilityEl.addEventListener('click', e => {
+      const btn = e.target.closest('[data-group-visibility]');
+      if (!btn) return;
+
+      const group = btn.dataset.groupVisibility;
+      const cfg   = _getConfig();
+      for (const id of _activeScreenIds(cfg)) {
+        const screenCfg = cfg.screens[id];
+        const hidden    = new Set(Array.isArray(screenCfg.hiddenGroups) ? screenCfg.hiddenGroups : []);
+        if (hidden.has(group)) hidden.delete(group);
+        else hidden.add(group);
+
+        if (screenCfg.groupMode === 'manual' && screenCfg.activeGroup === group) {
+          hidden.delete(group);
+        }
+
+        screenCfg.hiddenGroups = [...hidden];
+      }
+
+      _renderGroupVisibility();
       _notify();
     });
   }
@@ -147,4 +177,20 @@ function _refreshGroupSelector() {
   if (current === 'auto') sel.value = 'auto';
 }
 
+function _renderGroupVisibility() {
+  const el = document.getElementById('q-group-visibility');
+  if (!el || !_getConfig) return;
+
+  const cfg    = _getConfig().screens?.['1'] || {};
+  const hidden = new Set(Array.isArray(cfg.hiddenGroups) ? cfg.hiddenGroups : []);
+
+  el.innerHTML = _groups.map(g => {
+    const shown = !hidden.has(g);
+    return `<button type="button" class="adv-toggle ${shown ? 'on' : ''}" data-group-visibility="${esc(g)}">${esc(g)}</button>`;
+  }).join('');
+}
+
+function _removeHiddenGroup(hiddenGroups, group) {
+  return (Array.isArray(hiddenGroups) ? hiddenGroups : []).filter(g => g !== group);
+}
 

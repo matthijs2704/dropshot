@@ -135,7 +135,7 @@
 
   --submission-wall-message-color: #231c17;
   --submission-wall-meta-color:    #715a3a;
-  --submission-wall-message-font:  'Cinzel', Georgia, serif;
+  --submission-wall-message-font:  'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
   --submission-wall-meta-font:     'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
 }
 

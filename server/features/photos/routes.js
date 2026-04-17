@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto  = require('crypto');
 const express = require('express');
 const multer  = require('multer');
 const path    = require('path');
@@ -14,10 +15,22 @@ const { toCacheFilePath, toThumbFilePath } = require('../ingest/process');
 const { setHeroCandidate, deletePhotoMetadata, upsertPhotoMetadata } = require('../../db');
 
 const router = express.Router();
+const UPLOAD_TMP_DIR = path.join(PHOTOS_DIR, '.upload-tmp');
 
-// multer: store in memory then write ourselves so we control destination path
+fs.mkdirSync(UPLOAD_TMP_DIR, { recursive: true });
+
+// Multer writes to a temp directory first so large multi-file uploads do not
+// buffer the full request in RAM before we can persist anything.
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination(_req, _file, cb) {
+      cb(null, UPLOAD_TMP_DIR);
+    },
+    filename(_req, file, cb) {
+      const ext = path.extname(file.originalname || '').toLowerCase();
+      cb(null, `${Date.now()}-${crypto.randomUUID()}${ext}`);
+    },
+  }),
   limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB per file
   fileFilter(_req, file, cb) {
     const valid = /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.originalname);
@@ -28,6 +41,37 @@ const upload = multer({
 // Validate a group name: alphanumeric, hyphens, underscores, max 50 chars
 function isValidGroupName(name) {
   return /^[a-zA-Z0-9_-]{1,50}$/.test(name);
+}
+
+function sanitizeUploadFilename(name) {
+  const safeName = path.basename(name || 'upload').replace(/[^a-zA-Z0-9._-]/g, '_');
+  return safeName || `upload-${Date.now()}.jpg`;
+}
+
+async function cleanupTempFiles(files) {
+  await Promise.all((files || []).map(async file => {
+    if (!file?.path) return;
+    try { await fsp.unlink(file.path); } catch {}
+  }));
+}
+
+async function moveUploadedFile(srcPath, destPath) {
+  try {
+    await fsp.rename(srcPath, destPath);
+  } catch (err) {
+    if (err.code !== 'EXDEV') throw err;
+    await fsp.copyFile(srcPath, destPath);
+    try { await fsp.unlink(srcPath); } catch {}
+  }
+}
+
+function handleUploadMiddleware(req, res, next) {
+  upload.array('files', 200)(req, res, async err => {
+    if (!err) return next();
+    await cleanupTempFiles(req.files);
+    const status = err instanceof multer.MulterError ? 400 : 500;
+    return res.status(status).json({ ok: false, error: err.message });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -62,37 +106,46 @@ router.get('/', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/upload — multipart upload with optional group
+// POST /api/photos/upload — multipart upload with optional group
 // ---------------------------------------------------------------------------
-router.post('/upload', upload.array('files', 200), async (req, res) => {
+router.post('/upload', handleUploadMiddleware, async (req, res) => {
   const rawGroup = (req.body.group || '').trim();
   const group    = rawGroup && rawGroup !== 'ungrouped' ? rawGroup : null;
+  const files    = Array.isArray(req.files) ? req.files : [];
 
   if (group && !isValidGroupName(group)) {
+    await cleanupTempFiles(files);
     return res.status(400).json({ ok: false, error: 'Invalid group name. Use letters, numbers, hyphens or underscores (max 50 chars).' });
   }
 
-  if (!req.files || req.files.length === 0) {
+  if (files.length === 0) {
     return res.status(400).json({ ok: false, error: 'No files received.' });
   }
 
   const destDir = group ? path.join(PHOTOS_DIR, group) : PHOTOS_DIR;
-  await fsp.mkdir(destDir, { recursive: true });
+  await Promise.all([
+    fsp.mkdir(UPLOAD_TMP_DIR, { recursive: true }),
+    fsp.mkdir(destDir, { recursive: true }),
+  ]);
 
   const uploaded = [];
   const errors   = [];
 
-  for (const file of req.files) {
-    // Sanitize filename — keep extension, strip path separators
-    const safeName = path.basename(file.originalname).replace(/[^a-zA-Z0-9._-]/g, '_');
+  for (const file of files) {
+    const safeName = sanitizeUploadFilename(file.originalname);
     const destPath = path.join(destDir, safeName);
 
     try {
-      await fsp.writeFile(destPath, file.buffer);
-      // chokidar will pick this up; also kick off processing immediately
-      await upsertPhotoFromPath(destPath);
+      await moveUploadedFile(file.path, destPath);
+      // chokidar will pick this up; also kick off processing immediately.
+      // If the enqueue step fails, the file is still on disk and the watcher
+      // can recover it, so keep the upload itself successful.
+      await upsertPhotoFromPath(destPath).catch(err => {
+        console.warn(`[photos] failed to enqueue ${safeName}: ${err.message}`);
+      });
       uploaded.push({ name: safeName, group: group || 'ungrouped' });
     } catch (err) {
+      try { await fsp.unlink(file.path); } catch {}
       errors.push({ name: safeName, error: err.message });
     }
   }

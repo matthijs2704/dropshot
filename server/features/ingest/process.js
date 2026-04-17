@@ -8,6 +8,7 @@ const { getConfig } = require('../../config');
 const { broadcast } = require('../ws/broadcast');
 const { serializePhoto } = require('../photos/serialize');
 const { upsertPhotoMetadata } = require('../../db');
+const { extractCapturedAt } = require('./exif');
 
 const PHOTOS_DIR = path.join(__dirname, '..', '..', '..', 'photos');
 const CACHE_DIR  = path.join(__dirname, '..', '..', '..', 'cache', 'display');
@@ -68,6 +69,16 @@ function toThumbUrl(id, version) {
   return `/thumbs/${noExt}.jpg?v=${version}`;
 }
 
+async function readCapturedAtFromPath(filePath) {
+  try {
+    const meta = await sharp(filePath).metadata();
+    const capturedAt = extractCapturedAt(meta);
+    return Number.isFinite(capturedAt) ? capturedAt : 0;
+  } catch {
+    return 0;
+  }
+}
+
 async function processPhoto(id) {
   const photo = state.photosById.get(id);
   if (!photo) return;
@@ -77,6 +88,7 @@ async function processPhoto(id) {
 
   try {
     const meta      = await sharp(photo.sourcePath).metadata();
+    const capturedAt = extractCapturedAt(meta);
     const cachePath = toCacheFilePath(id);
     const thumbPath = toThumbFilePath(id);
     await fsp.mkdir(path.dirname(cachePath), { recursive: true });
@@ -102,6 +114,7 @@ async function processPhoto(id) {
     photo.status        = 'ready';
     // addedAt is set at upsert time (server arrival) and intentionally NOT
     // overwritten here so recency bias reflects when photos entered the system.
+    photo.capturedAt    = Number.isFinite(capturedAt) ? capturedAt : 0;
     photo.width         = meta.width  || null;
     photo.height        = meta.height || null;
     photo.displayWidth  = cacheMeta.width  || null;
@@ -136,6 +149,7 @@ async function processPhoto(id) {
 
 module.exports = {
   processPhoto,
+  readCapturedAtFromPath,
   toCacheFilePath,
   toThumbFilePath,
   PHOTOS_DIR,

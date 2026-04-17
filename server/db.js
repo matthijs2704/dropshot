@@ -65,6 +65,7 @@ async function initDb() {
       source_url TEXT,
       display_url TEXT,
       added_at INTEGER,
+      captured_at INTEGER,
       processed_at INTEGER,
       status TEXT,
       error TEXT,
@@ -76,6 +77,10 @@ async function initDb() {
       updated_at INTEGER NOT NULL
     )
   `);
+
+  try {
+    await run('ALTER TABLE photo_metadata ADD COLUMN captured_at INTEGER');
+  } catch {}
 
   try {
     await run('ALTER TABLE photo_metadata ADD COLUMN processed_at INTEGER');
@@ -130,9 +135,9 @@ async function upsertPhotoMetadata(photo) {
   await run(
     `INSERT INTO photo_metadata (
       photo_id, name, event_group, relative_path, source_path, source_url,
-      display_url, added_at, processed_at, status, error, width, height, display_width,
+      display_url, added_at, captured_at, processed_at, status, error, width, height, display_width,
       display_height, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(photo_id) DO UPDATE SET
       name = excluded.name,
       event_group = excluded.event_group,
@@ -141,6 +146,7 @@ async function upsertPhotoMetadata(photo) {
       source_url = excluded.source_url,
       display_url = excluded.display_url,
       added_at = excluded.added_at,
+      captured_at = excluded.captured_at,
       processed_at = excluded.processed_at,
       status = excluded.status,
       error = excluded.error,
@@ -158,6 +164,7 @@ async function upsertPhotoMetadata(photo) {
       photo.sourceUrl || null,
       photo.displayUrl || null,
       Number(photo.addedAt || 0),
+      Number.isFinite(photo.capturedAt) ? photo.capturedAt : null,
       Number(photo.processedAt || 0) || null,
       photo.status || null,
       photo.error || null,
@@ -206,6 +213,7 @@ async function loadAllPhotoMetadata() {
     sourceUrl:     r.source_url    || null,
     displayUrl:    r.display_url   || null,
     addedAt:       r.added_at      || 0,
+    capturedAt:    typeof r.captured_at === 'number' ? r.captured_at : null,
     processedAt:   r.processed_at  || null,
     status:        r.status        || 'queued',
     error:         r.error         || null,

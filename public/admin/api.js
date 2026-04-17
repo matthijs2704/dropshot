@@ -107,7 +107,36 @@ export async function disableOidc() {
   return apiFetch('/api/auth/oidc', { method: 'DELETE' });
 }
 
-export function uploadFiles(files, group, onProgress) {
+const MAX_UPLOAD_BATCH_FILES = 10;
+const MAX_UPLOAD_BATCH_BYTES = 100 * 1024 * 1024;
+
+function splitUploadBatches(files) {
+  const batches = [];
+  let batch = [];
+  let batchBytes = 0;
+
+  for (const file of Array.from(files || [])) {
+    const fileSize = Number(file?.size) || 0;
+    const wouldOverflow = batch.length > 0 && (
+      batch.length >= MAX_UPLOAD_BATCH_FILES ||
+      batchBytes + fileSize > MAX_UPLOAD_BATCH_BYTES
+    );
+
+    if (wouldOverflow) {
+      batches.push(batch);
+      batch = [];
+      batchBytes = 0;
+    }
+
+    batch.push(file);
+    batchBytes += fileSize;
+  }
+
+  if (batch.length) batches.push(batch);
+  return batches;
+}
+
+function uploadBatch(files, group, onProgress) {
   return new Promise((resolve, reject) => {
     const fd = new FormData();
     if (group && group !== 'ungrouped') fd.append('group', group);
@@ -128,14 +157,49 @@ export function uploadFiles(files, group, onProgress) {
         return reject(new Error('Not authenticated'));
       }
 
+      let data = null;
       try {
-        const data = JSON.parse(xhr.responseText);
-        resolve(data);
+        data = xhr.responseText ? JSON.parse(xhr.responseText) : null;
       } catch {
-        reject(new Error('Invalid server response'));
+        return reject(new Error('Invalid server response'));
       }
+
+      if (xhr.status < 200 || xhr.status >= 300 || data?.ok === false) {
+        const message = data?.error || `HTTP ${xhr.status}`;
+        return reject(new Error(message));
+      }
+
+      resolve(data || { ok: true, uploaded: [], errors: [] });
     };
+
     xhr.onerror = () => reject(new Error('Upload failed'));
     xhr.send(fd);
   });
+}
+
+export async function uploadFiles(files, group, onProgress) {
+  const batches = splitUploadBatches(files);
+  const result = { ok: true, uploaded: [], errors: [] };
+  const totalBytes = batches.reduce((sum, batch) => (
+    sum + batch.reduce((batchSum, file) => batchSum + (Number(file?.size) || 0), 0)
+  ), 0);
+  let uploadedBytes = 0;
+
+  for (const batch of batches) {
+    const batchBytes = batch.reduce((sum, file) => sum + (Number(file?.size) || 0), 0);
+    const data = await uploadBatch(batch, group, (loaded, total) => {
+      if (!onProgress) return;
+      const effectiveTotal = totalBytes || total || 1;
+      const effectiveLoaded = Math.min(uploadedBytes + loaded, uploadedBytes + batchBytes);
+      onProgress(effectiveLoaded, effectiveTotal);
+    });
+
+    uploadedBytes += batchBytes;
+    result.uploaded.push(...(data.uploaded || []));
+    result.errors.push(...(data.errors || []));
+  }
+
+  if (onProgress) onProgress(totalBytes || 1, totalBytes || 1);
+
+  return result;
 }

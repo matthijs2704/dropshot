@@ -11,6 +11,7 @@ function serializePhoto(photo) {
     eventGroup:    photo.eventGroup,
     status:        photo.status,
     addedAt:       photo.addedAt,
+    capturedAt:    Number(photo.capturedAt) > 0 ? photo.capturedAt : null,
     processedAt:   photo.processedAt || null,
     width:         photo.width,
     height:        photo.height,

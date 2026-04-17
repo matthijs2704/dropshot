@@ -5,7 +5,7 @@ const fsp  = require('fs').promises;
 const state = require('../../state');
 const { broadcast } = require('../ws/broadcast');
 const { getReadyPhotos } = require('../photos/serialize');
-const { processPhoto, toCacheFilePath, toThumbFilePath, PHOTOS_DIR } = require('./process');
+const { processPhoto, readCapturedAtFromPath, toCacheFilePath, toThumbFilePath, PHOTOS_DIR } = require('./process');
 const { getPublicConfig } = require('../../config');
 const { serializeHeroLocks } = require('../ws/handlers');
 const { upsertPhotoMetadata, deletePhotoMetadata } = require('../../db');
@@ -96,6 +96,12 @@ async function upsertPhotoFromPath(filePath) {
         // Source unchanged — keep existing state, skip reprocessing
         existing.sourcePath  = filePath;
         existing.sourceUrl   = `/photos-original/${id}`;
+        if (existing.capturedAt == null) {
+          existing.capturedAt = await readCapturedAtFromPath(filePath);
+          upsertPhotoMetadata(existing).catch(err => {
+            console.warn(`[ingest] failed to persist capturedAt for ${id}: ${err.message}`);
+          });
+        }
         return;
       }
     } catch {
@@ -126,6 +132,7 @@ async function upsertPhotoFromPath(filePath) {
     sourceUrl:    `/photos-original/${id}`,
     displayUrl:   '',
     addedAt,
+    capturedAt:   existing?.capturedAt ?? null,
     processedAt:  null,
     status:       'queued',
   };

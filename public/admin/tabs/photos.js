@@ -10,6 +10,21 @@ let _filter    = 'all';
 let _groups    = ['ungrouped'];
 let _onReload  = null; // called after a delete so health stats refresh
 
+function _sortPhotos() {
+  _photos.sort((a, b) => {
+    const byCapturedAt = (Number(b?.capturedAt) || 0) - (Number(a?.capturedAt) || 0);
+    if (byCapturedAt !== 0) return byCapturedAt;
+
+    const byAddedAt = (Number(b?.addedAt) || 0) - (Number(a?.addedAt) || 0);
+    if (byAddedAt !== 0) return byAddedAt;
+
+    const byProcessedAt = (Number(b?.processedAt) || 0) - (Number(a?.processedAt) || 0);
+    if (byProcessedAt !== 0) return byProcessedAt;
+
+    return String(a?.id || '').localeCompare(String(b?.id || ''));
+  });
+}
+
 /**
  * @param {Function} onReload - called after a photo is deleted
  */
@@ -27,6 +42,7 @@ export function updateGroups(groups) {
 export async function refreshPhotos() {
   try {
     _photos = await loadPhotos();
+    _sortPhotos();
     _renderGrid();
   } catch (err) {
     console.warn('Photos load failed:', err.message);
@@ -38,6 +54,7 @@ export function onNewPhoto(photo) {
   const idx = _photos.findIndex(p => p.id === photo.id);
   if (idx >= 0) _photos[idx] = photo;
   else _photos.unshift(photo);
+  _sortPhotos();
   _renderGrid();
 }
 
@@ -50,6 +67,7 @@ export function onPhotoUpdate(photo) {
   const idx = _photos.findIndex(p => p.id === photo.id);
   if (idx >= 0) {
     _photos[idx] = photo;
+    _sortPhotos();
     _renderGrid();
   }
 }
@@ -228,4 +246,3 @@ function _renderPhotoCard(photo) {
       </div>
     </div>`;
 }
-

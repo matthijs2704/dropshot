@@ -34,6 +34,15 @@ function isValidPhoto(filePath) {
   return VALID_EXTS.has(path.extname(filePath).toLowerCase());
 }
 
+function isIgnoredPhotoPath(filePath) {
+  const relativePath = path.relative(PHOTOS_DIR, filePath);
+  if (!relativePath || relativePath.startsWith('..')) return false;
+
+  return normalizeSlashes(relativePath)
+    .split('/')
+    .some(part => part.startsWith('.'));
+}
+
 // ---------------------------------------------------------------------------
 // Queue management — priority queue (newest addedAt processed first)
 // ---------------------------------------------------------------------------
@@ -79,7 +88,7 @@ function runQueue() {
 // ---------------------------------------------------------------------------
 
 async function upsertPhotoFromPath(filePath) {
-  if (!isValidPhoto(filePath)) return;
+  if (isIgnoredPhotoPath(filePath) || !isValidPhoto(filePath)) return;
   const id       = toPhotoId(filePath);
   const filename = path.basename(id);
   const existing = state.photosById.get(id);
@@ -151,6 +160,7 @@ async function upsertPhotoFromPath(filePath) {
 }
 
 async function removePhotoByPath(filePath) {
+  if (isIgnoredPhotoPath(filePath)) return;
   const id       = toPhotoId(filePath);
   const existing = state.photosById.get(id);
   state.photosById.delete(id);
@@ -180,6 +190,7 @@ async function walkPhotoFiles(dir) {
   const entries = await fsp.readdir(dir, { withFileTypes: true });
   const files   = [];
   for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...await walkPhotoFiles(full));
@@ -241,5 +252,6 @@ module.exports = {
   toEventGroup,
   isValidPhoto,
   normalizeSlashes,
+  isIgnoredPhotoPath,
   PHOTOS_DIR,
 };

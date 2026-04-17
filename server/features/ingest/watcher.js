@@ -3,7 +3,7 @@
 const path     = require('path');
 const fs       = require('fs');
 const chokidar = require('chokidar');
-const { upsertPhotoFromPath, removePhotoByPath, scanPhotos, PHOTOS_DIR } = require('./index');
+const { upsertPhotoFromPath, removePhotoByPath, scanPhotos, PHOTOS_DIR, isIgnoredPhotoPath } = require('./index');
 const { createSlide, getSlides, updateSlide } = require('../slides/store');
 const { broadcast }                           = require('../ws/broadcast');
 const { needsTranscode, transcodeToMp4 }      = require('./transcode');
@@ -40,6 +40,7 @@ function startWatcher() {
   // ── Photos watcher ────────────────────────────────────────────────────────
   const watcher = chokidar.watch(PHOTOS_DIR, {
     ignoreInitial: true,
+    ignored: filePath => isIgnoredPhotoPath(filePath),
     awaitWriteFinish: { stabilityThreshold: 500, pollInterval: 100 },
   });
 

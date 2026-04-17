@@ -15,7 +15,7 @@ const { toCacheFilePath, toThumbFilePath } = require('../ingest/process');
 const { setHeroCandidate, deletePhotoMetadata, upsertPhotoMetadata } = require('../../db');
 
 const router = express.Router();
-const UPLOAD_TMP_DIR = path.join(PHOTOS_DIR, '.upload-tmp');
+const UPLOAD_TMP_DIR = path.join(__dirname, '..', '..', '..', 'cache', 'upload-tmp');
 
 fs.mkdirSync(UPLOAD_TMP_DIR, { recursive: true });
 

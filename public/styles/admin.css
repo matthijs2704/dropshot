@@ -1202,7 +1202,7 @@ progress::-moz-progress-bar      { background: var(--accent); border-radius: 3px
 .photos-empty { color: var(--muted); font-size: 13px; padding: 24px; text-align: center; grid-column: 1/-1; }
 
 .photo-card { border-radius: var(--radius); overflow: hidden; background: var(--surface2); border: 1px solid var(--border); }
-.photo-thumb { position: relative; aspect-ratio: 4/3; overflow: hidden; background: #111; }
+.photo-thumb { position: relative; aspect-ratio: 4/3; overflow: hidden; background: #111; cursor: zoom-in; }
 .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .photo-preview { cursor: zoom-in; }
 .photo-thumb-placeholder { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 11px; color: var(--muted); }
@@ -1221,6 +1221,7 @@ progress::-moz-progress-bar      { background: var(--accent); border-radius: 3px
   padding: 8px;
   background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 60%);
   opacity: 0; transition: opacity 0.15s;
+  pointer-events: none;
 }
 .photo-thumb:hover .photo-overlay { opacity: 1; }
 
@@ -1228,6 +1229,7 @@ progress::-moz-progress-bar      { background: var(--accent); border-radius: 3px
   width: 30px; height: 30px; border-radius: 50%; border: none;
   display: flex; align-items: center; justify-content: center;
   font-size: 15px; cursor: pointer; padding: 0; transition: background 0.12s, transform 0.1s;
+  pointer-events: auto;
 }
 .photo-hero-btn         { background: rgba(255,255,255,0.15); color: #fff; }
 .photo-hero-btn.active  { background: rgba(255,200,0,0.3);   color: #ffd700; }

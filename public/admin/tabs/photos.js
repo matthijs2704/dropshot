@@ -172,9 +172,9 @@ function _renderGrid() {
 
   grid.innerHTML = filtered.map(photo => _renderPhotoCard(photo)).join('');
 
-  grid.querySelectorAll('.photo-preview').forEach(img => {
-    img.addEventListener('click', () => {
-      showImageModal(img.dataset.fullSrc || img.currentSrc || img.src, img.dataset.title || img.alt || '');
+  grid.querySelectorAll('.photo-thumb[data-full-src]').forEach(thumb => {
+    thumb.addEventListener('click', () => {
+      showImageModal(thumb.dataset.fullSrc || '', thumb.dataset.title || '');
     });
   });
 
@@ -231,7 +231,7 @@ function _renderPhotoCard(photo) {
 
   return `
     <div class="photo-card" data-id="${esc(photo.id)}">
-      <div class="photo-thumb">
+      <div class="photo-thumb" data-full-src="${esc(fullSrc)}" data-title="${esc(photo.name)}">
         ${imgSrc
           ? `<img class="photo-preview" src="${esc(imgSrc)}" data-full-src="${esc(fullSrc)}" data-title="${esc(photo.name)}" alt="${esc(photo.name)}" loading="lazy">`
           : `<div class="photo-thumb-placeholder">${esc(photo.status)}</div>`}

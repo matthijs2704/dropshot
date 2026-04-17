@@ -77,6 +77,47 @@ export function showConfirm(title, body, okLabel = 'Delete') {
   });
 }
 
+export function showImageModal(src, title = '') {
+  if (!src) return;
+
+  const backdrop = document.getElementById('image-modal');
+  const img = document.getElementById('image-modal-img');
+  const caption = document.getElementById('image-modal-caption');
+  const close = document.getElementById('image-modal-close');
+  if (!backdrop || !img || !close) return;
+
+  img.src = src;
+  img.alt = title || 'Preview';
+  if (caption) caption.textContent = title || '';
+  backdrop.classList.add('open');
+
+  function cleanup() {
+    backdrop.classList.remove('open');
+    img.removeAttribute('src');
+    img.alt = '';
+    if (caption) caption.textContent = '';
+    close.removeEventListener('click', onClose);
+    backdrop.removeEventListener('click', onBackdrop);
+    document.removeEventListener('keydown', onKey);
+  }
+
+  function onClose() {
+    cleanup();
+  }
+
+  function onBackdrop(e) {
+    if (e.target === backdrop) cleanup();
+  }
+
+  function onKey(e) {
+    if (e.key === 'Escape') cleanup();
+  }
+
+  close.addEventListener('click', onClose);
+  backdrop.addEventListener('click', onBackdrop);
+  document.addEventListener('keydown', onKey);
+}
+
 // ---------------------------------------------------------------------------
 // Dirty indicator
 // ---------------------------------------------------------------------------

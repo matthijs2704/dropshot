@@ -1,4 +1,4 @@
-import { showToast } from './app.js';
+import { showToast, showImageModal } from './app.js';
 import { esc, fmtAgo } from '/shared/utils.js';
 
 async function apiFetch(url, opts = {}) {
@@ -287,7 +287,7 @@ function _renderSubmissionCards(items, kind) {
     return `
       <div class="sub-row">
         ${item.photoThumbUrl
-          ? `<img class="sub-row-thumb" src="${esc(item.photoThumbUrl)}" alt="">`
+          ? `<img class="sub-row-thumb sub-image-preview" src="${esc(item.photoThumbUrl)}" data-full-src="${esc(item.photoOriginalUrl || item.photoThumbUrl)}" data-title="${esc(item.submitterValue || 'submission')}" alt="">`
           : '<div class="sub-row-thumb sub-row-nophoto"></div>'}
         <div class="sub-row-content">
           <div class="sub-row-meta">${esc(item.submitterValue || 'anonymous')} · ${esc(age)}</div>
@@ -671,7 +671,7 @@ function _renderDashSubmissionsSummary(screenPending, tipPending) {
          <button class="sc-btn sc-btn-del" data-sub-action="reject" data-sub-id="${esc(item.id)}">Reject</button>`;
     return `
       <div class="dash-sub-row">
-        ${item.photoThumbUrl ? `<img class="dash-sub-thumb" src="${esc(item.photoThumbUrl)}" alt="">` : '<div class="dash-sub-thumb dash-sub-nophoto"></div>'}
+        ${item.photoThumbUrl ? `<img class="dash-sub-thumb sub-image-preview" src="${esc(item.photoThumbUrl)}" data-full-src="${esc(item.photoOriginalUrl || item.photoThumbUrl)}" data-title="${esc(item.submitterValue || 'submission')}" alt="">` : '<div class="dash-sub-thumb dash-sub-nophoto"></div>'}
         <div class="dash-sub-content">
           <div class="dash-sub-meta">${esc(item.submitterValue || 'anonymous')} · ${esc(age)}${isTip ? ' · tip' : ''}</div>
           <div class="dash-sub-msg">${message ? esc(message) : '<span class="muted">photo only</span>'}</div>
@@ -857,6 +857,12 @@ function bindActions() {
   });
 
   const onSubmissionQueueClick = async e => {
+    const preview = e.target.closest('.sub-image-preview');
+    if (preview) {
+      showImageModal(preview.dataset.fullSrc || preview.currentSrc || preview.src, preview.dataset.title || preview.alt || '');
+      return;
+    }
+
     const btn = e.target.closest('button[data-sub-action]');
     if (!btn) return;
     const id = btn.dataset.subId;

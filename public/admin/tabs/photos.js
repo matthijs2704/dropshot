@@ -1,7 +1,7 @@
 // Photos tab: upload zone, thumbnail grid, delete/hero actions
 
 import { loadPhotos, patchPhoto, deletePhoto, uploadFiles } from '../api.js';
-import { showConfirm } from '../app.js';
+import { showConfirm, showImageModal } from '../app.js';
 import { icon } from '/shared/icons.js';
 import { esc } from '/shared/utils.js';
 
@@ -172,6 +172,12 @@ function _renderGrid() {
 
   grid.innerHTML = filtered.map(photo => _renderPhotoCard(photo)).join('');
 
+  grid.querySelectorAll('.photo-preview').forEach(img => {
+    img.addEventListener('click', () => {
+      showImageModal(img.dataset.fullSrc || img.currentSrc || img.src, img.dataset.title || img.alt || '');
+    });
+  });
+
   // Bind actions
   grid.querySelectorAll('.photo-hero-btn').forEach(btn => {
     btn.addEventListener('click', async e => {
@@ -221,12 +227,13 @@ function _renderPhotoCard(photo) {
     : '';
   const heroClass = photo.heroCandidate ? 'active' : '';
   const imgSrc    = photo.thumbUrl || photo.displayUrl || photo.url || '';
+  const fullSrc   = photo.displayUrl || photo.url || photo.thumbUrl || '';
 
   return `
     <div class="photo-card" data-id="${esc(photo.id)}">
       <div class="photo-thumb">
         ${imgSrc
-          ? `<img src="${esc(imgSrc)}" alt="${esc(photo.name)}" loading="lazy">`
+          ? `<img class="photo-preview" src="${esc(imgSrc)}" data-full-src="${esc(fullSrc)}" data-title="${esc(photo.name)}" alt="${esc(photo.name)}" loading="lazy">`
           : `<div class="photo-thumb-placeholder">${esc(photo.status)}</div>`}
         ${statusBadge}
         <div class="photo-overlay">

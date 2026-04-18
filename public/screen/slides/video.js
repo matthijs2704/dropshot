@@ -1,23 +1,19 @@
 // Slide renderer: video
-// Streams directly from /slide-assets/videos/ via HTTP range requests.
-// The browser's native HTTP cache (not the SW) handles video caching since
-// the SW Cache API cannot correctly serve 206 Partial Content responses.
 
 import { el } from '../../shared/utils.js';
+import { getVideoObjectUrl } from '../video-cache.js';
 
 /**
  * @param {object} slide
  * @returns {{ el: HTMLElement, play: () => Promise<void> }}
  */
-export function buildVideoSlide(slide) {
-  const src = `/slide-assets/videos/${encodeURIComponent(slide.filename)}`;
+export async function buildVideoSlide(slide) {
+  const src = await getVideoObjectUrl(slide.filename);
 
   const video = el('video', { attrs: { preload: 'auto' } });
   video.muted       = slide.muted !== false;
   video.playsInline = true;
-  video.src         = src; // set src directly — no <source> type hint which causes
-                           // Chrome to immediately reject video/quicktime on both
-                           // macOS and Linux regardless of actual codec
+  video.src         = src;
 
   const wrap = el('div', { cls: 'slide-video' }, video);
 
@@ -95,6 +91,7 @@ export function buildVideoSlide(slide) {
         video.removeAttribute('src');
         video.load();
       } catch {}
+      try { URL.revokeObjectURL(src); } catch {}
     },
   };
 }

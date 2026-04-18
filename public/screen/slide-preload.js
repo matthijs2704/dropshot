@@ -9,6 +9,8 @@
 //
 // Other slide types (text-card, qr, webpage): no network asset, instantly ready.
 
+import { cacheVideoFile, getVideoRequestUrl } from './video-cache.js';
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
@@ -131,36 +133,10 @@ function _startPreload(slide) {
 
 function _preloadVideo(slide) {
   if (!slide.filename) { _markError(slide.id); return; }
-  const src = `/slide-assets/videos/${encodeURIComponent(slide.filename)}`;
-
-  // Create a detached <video> element. With preload="auto" the browser begins
-  // downloading the first segment even without DOM insertion, which:
-  //   1. Warms the browser's HTTP cache for range requests
-  //   2. Gives the lookahead element in slides/index.js data to play immediately
-  const video       = document.createElement('video');
-  video.muted       = true;
-  video.playsInline = true;
-  video.preload     = 'auto';
-  video.src         = src;
-
-  // Resolve as soon as enough data exists to start playback
-  video.addEventListener('canplay', () => {
-    _markReady(slide.id, src);
-    // Release the element once it's served its purpose — the lookahead
-    // element in slides/index.js will create its own fresh instance.
-    video.src = '';
-    video.load();
-  }, { once: true });
-
-  video.addEventListener('error', () => _markError(slide.id), { once: true });
-
-  // Safety: mark ready after 15 s even if canplay never fires (slow network /
-  // large file where a few seconds is enough to start playing anyway).
-  setTimeout(() => {
-    if (_state.get(slide.id) === 'pending') _markReady(slide.id, src);
-    video.src = '';
-    video.load();
-  }, 15_000);
+  const src = getVideoRequestUrl(slide.filename);
+  cacheVideoFile(slide.filename)
+    .then(() => _markReady(slide.id, src))
+    .catch(() => _markError(slide.id));
 }
 
 // ── Image slide ────────────────────────────────────────────────────────────

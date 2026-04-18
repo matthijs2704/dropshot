@@ -113,7 +113,7 @@ function _rowSizes(n) {
 
 function _fitText(sz, hasPhoto, isHero, msgText, metaText) {
   let msgSize  = sz.msgSize;
-  let msgLines = msgText ? (hasPhoto ? 2 : 5) : 0;
+  let msgLines = msgText ? (hasPhoto ? 3 : 5) : 0;
   let metaSize = sz.metaSize;
   let metaLines = metaText ? 1 : 0;
 

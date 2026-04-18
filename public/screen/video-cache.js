@@ -9,40 +9,59 @@ export function getVideoRequestUrl(filename) {
   return _videoUrl(filename);
 }
 
+/**
+ * Ensures the video is stored in the Cache API. Returns void.
+ * Safe to call concurrently — duplicate in-flight fetches are deduplicated.
+ */
 export async function cacheVideoFile(filename) {
   if (!filename) throw new Error('Missing video filename');
+  if (typeof caches === 'undefined') return;
 
   const url = _videoUrl(filename);
   const existing = _pending.get(url);
   if (existing) return existing;
 
   const work = (async () => {
-    if (typeof caches === 'undefined') {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`Video fetch failed: ${response.status}`);
-      return response;
-    }
-
     const cache = await caches.open(VIDEO_CACHE);
-    let response = await cache.match(url);
-    if (response) return response;
+    if (await cache.match(url)) return; // already cached
 
-    response = await fetch(url);
+    const response = await fetch(url);
     if (!response.ok) throw new Error(`Video fetch failed: ${response.status}`);
-    await cache.put(url, response.clone());
-    return response;
+    await cache.put(url, response);
   })();
 
   _pending.set(url, work);
   try {
-    return await work;
+    await work;
   } finally {
     _pending.delete(url);
   }
 }
 
+/**
+ * Returns a blob URL for the video, caching it first if needed.
+ * Each call returns a fresh blob URL — caller must revoke it when done.
+ * Reads a fresh Response from the Cache API so concurrent callers each
+ * get their own independent body (Response bodies can only be consumed once).
+ */
 export async function getVideoObjectUrl(filename) {
-  const response = await cacheVideoFile(filename);
+  if (!filename) throw new Error('Missing video filename');
+
+  const url = _videoUrl(filename);
+
+  if (typeof caches !== 'undefined') {
+    await cacheVideoFile(filename);
+    const cache = await caches.open(VIDEO_CACHE);
+    const response = await cache.match(url);
+    if (response) {
+      const blob = await response.blob();
+      return URL.createObjectURL(blob);
+    }
+  }
+
+  // Fallback: Cache API unavailable — fetch directly each time
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Video fetch failed: ${response.status}`);
   const blob = await response.blob();
   return URL.createObjectURL(blob);
 }

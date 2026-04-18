@@ -14,7 +14,6 @@ export const layout = {
       orientation: 'portrait',
       enforceOrientation: false,
       orientationBoost: 1.25,
-      avoidRecentMs: 120_000,
       allowRecentFallback: true,
     });
     return { photos };

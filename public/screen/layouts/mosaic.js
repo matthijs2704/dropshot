@@ -3,7 +3,7 @@
 import { TEMPLATE_DEFS, pickTemplate } from '../templates.js';
 import { applySmartFit }  from '../fit.js';
 import { crossFadeSlot, startKenBurns }  from '../transitions.js';
-import { pickNewestPhotos, arrangePhotosForSlots } from '../photos.js';
+import { arrangePhotosForSlots } from '../photos.js';
 import { shuffle, photoUrl, photoThumbUrl, el } from '../../shared/utils.js';
 
 // ---------------------------------------------------------------------------
@@ -67,12 +67,31 @@ export const layout = {
     // Combine: landscape first, then portrait — arrangePhotosForSlots will
     // score each photo against each slot by aspect-ratio fit.
     const others = [...landscapePhotos, ...portraitPhotos];
+    const recentSlots = tplDef ? tplDef.slots.filter(s => s.recent) : [];
+    const recentPhotos = [];
+    const recentUsedIds = [...excludeIds, ...others.map(p => p?.id).filter(Boolean)];
 
-    return { tplName, heroPhoto, others };
+    for (const slot of recentSlots) {
+      const picked = helpers.pickNewestPhotos(1, cfg, recentUsedIds, slot.portrait
+        ? {
+            orientation: 'portrait',
+            enforceOrientation: false,
+            orientationBonusMs: 45_000,
+          }
+        : {
+            orientation: 'landscape',
+          });
+
+      const photo = picked[0] || null;
+      recentPhotos.push(photo);
+      if (photo?.id) recentUsedIds.push(photo.id);
+    }
+
+    return { tplName, heroPhoto, others, recentPhotos };
   },
 
   build(picked, cfg) {
-    return buildMosaic(picked.tplName, picked.heroPhoto, picked.others, cfg.minTilePx || 170, cfg);
+    return buildMosaic(picked.tplName, picked.heroPhoto, picked.others, picked.recentPhotos, cfg.minTilePx || 170);
   },
 
   /**
@@ -136,7 +155,7 @@ function _photoUrlForSlot(photo, slotDef, tpl) {
  * @param {number}   minTilePx      - Minimum tile dimension in px (from config)
  * @returns {{ el, visibleIds, slotEls, templateName, startMotion }}
  */
-export function buildMosaic(templateName, heroPhoto, otherPhotos, minTilePx, cfg) {
+export function buildMosaic(templateName, heroPhoto, otherPhotos, recentPhotos, minTilePx) {
   const tpl = TEMPLATE_DEFS[templateName] || TEMPLATE_DEFS['hero-left-9'];
 
   const rootEl = el('div', { cls: 'layout layout-mosaic' });
@@ -145,28 +164,7 @@ export function buildMosaic(templateName, heroPhoto, otherPhotos, minTilePx, cfg
 
   // Separate slots by type: hero, recent, normal
   const normalSlots = tpl.slots.filter(s => !s.hero && !s.recent);
-  const recentSlots = tpl.slots.filter(s => s.recent);
-
   const arranged     = arrangePhotosForSlots(normalSlots, otherPhotos);
-  // Fill recent slots with the newest photos (distinct from hero + normal)
-  const usedIds      = [heroPhoto?.id, ...arranged.map(p => p?.id)].filter(Boolean);
-  const recentPhotos = [];
-  const recentUsedIds = [...usedIds];
-  for (const slot of recentSlots) {
-    const picked = pickNewestPhotos(1, cfg || {}, recentUsedIds, slot.portrait
-      ? {
-          orientation: 'portrait',
-          enforceOrientation: false,
-          orientationBonusMs: 45_000,
-        }
-      : {
-          orientation: 'landscape',
-        });
-
-    const photo = picked[0] || null;
-    recentPhotos.push(photo);
-    if (photo?.id) recentUsedIds.push(photo.id);
-  }
 
   const slotEls    = [];
   const visibleIds = [];

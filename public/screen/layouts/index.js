@@ -6,7 +6,9 @@ import { createLayoutLifecycle } from '../layout-lifecycle.js';
 import {
   pickPhotos,
   pickHeroPhoto,
+  pickNewestPhotos,
   markAsHeroShown,
+  getRecentAvoidWindowMs,
   getReadyPhotoPoolSize,
 } from '../photos.js';
 import {
@@ -97,13 +99,22 @@ const _layoutsReady = _loadLayouts();
 // ---------------------------------------------------------------------------
 
 function _buildHelpers(cfg) {
-  // Wrap pickPhotos to inject avoidRecentMs = layoutDuration so photos shown
-  // in the previous cycle are hard-excluded from the primary pool (but still
-  // used as last-resort fallback when the pool is small).
-  const avoidRecentMs = cfg?.layoutDuration || DEFAULT_LAYOUT_DUR_MS;
+  const poolSize = _readyPoolSize(cfg);
+  const _resolveCfg = (candidate) => candidate || cfg;
+  const _resolveAvoidRecentMs = (activeCfg, count, options = {}) =>
+    Number(options.avoidRecentMs ?? getRecentAvoidWindowMs(activeCfg, count, poolSize));
+
   return {
-    pickPhotos: (count, c, excludeIds, hardExclude, options = {}) =>
-      pickPhotos(count, c, excludeIds, hardExclude, { avoidRecentMs, ...options }),
+    pickPhotos: (count, c, excludeIds, hardExclude, options = {}) => {
+      const activeCfg = _resolveCfg(c);
+      const avoidRecentMs = _resolveAvoidRecentMs(activeCfg, count, options);
+      return pickPhotos(count, activeCfg, excludeIds, hardExclude, { ...options, avoidRecentMs });
+    },
+    pickNewestPhotos: (count, c, excludeIds, options = {}) => {
+      const activeCfg = _resolveCfg(c);
+      const avoidRecentMs = _resolveAvoidRecentMs(activeCfg, count, options);
+      return pickNewestPhotos(count, activeCfg, excludeIds, { ...options, avoidRecentMs });
+    },
     pickAndClaimHero: _pickAndClaimHero,
   };
 }
@@ -330,19 +341,21 @@ async function runCycle() {
         cycleStart,
         visibleIds,
         signal,
-        pickMorePhotos: (count, options = {}) =>
-          pickPhotos(
+        pickMorePhotos: (count, options = {}) => {
+          const avoidRecentMs = Number(options.avoidRecentMs ?? getRecentAvoidWindowMs(cfg, count));
+          return pickPhotos(
             count,
             cfg,
             [...visibleIds, ...(options.excludeIds || [])],
             false,
             {
-              avoidRecentMs: cfg.layoutDuration || DEFAULT_LAYOUT_DUR_MS,
               orientation: options.orientation || 'any',
               enforceOrientation: options.enforceOrientation,
               orientationBoost: options.orientationBoost,
+              avoidRecentMs,
             },
-          ),
+          );
+        },
       }).then(newIds => {
         if (!signal.aborted && newIds?.length) {
           displayState.visibleIds = [...new Set([...displayState.visibleIds, ...newIds])];
@@ -374,8 +387,9 @@ function _claimHero(photoId, ttlSec) {
 
 function _pickAndClaimHero(cfg, options = {}, useFallback = true) {
   const hero = pickHeroPhoto(cfg, _heroLocks, _screenId, options);
+  const avoidRecentMs = Number(options.avoidRecentMs ?? getRecentAvoidWindowMs(cfg, 1));
   const photo = hero || (useFallback
-    ? pickPhotos(1, cfg, [], true, options)[0] || null
+    ? pickPhotos(1, cfg, [], true, { ...options, avoidRecentMs })[0] || null
     : null);
 
   if (photo) {

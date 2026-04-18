@@ -10,6 +10,7 @@ export {
   pickNewestPhotos,
   arrangePhotosForSlots,
   markAsHeroShown,
+  getRecentAvoidWindowMs,
   getReadyPhotoPoolSize,
 } from './photo-selection.js';
 

@@ -21,7 +21,7 @@ const { initSubmissionStore } = require('./features/submissions/store');
 
 const photosRouter  = require('./features/photos/routes');
 const screensRouter = require('./features/screens/routes');
-const { slidesRouter, playlistRouter } = require('./features/slides/routes');
+const { slidesRouter, playlistRouter, qrRouter } = require('./features/slides/routes');
 const themesRouter  = require('./features/themes/routes');
 const alertsRouter  = require('./features/alerts/routes');
 const { publicRouter: submissionsPublicRouter, adminRouter: submissionsAdminRouter } = require('./features/submissions/routes');
@@ -150,6 +150,7 @@ app.get('/submit', (_req, res) => {
 // API routes — /api/auth is public; everything else requires a session
 app.use('/api/auth',       authRouter);
 app.use('/api/submissions', submissionsPublicRouter);
+app.use('/api/slides',     qrRouter);
 app.use('/api/photos',     requireAuth, photosRouter);
 app.use('/api/slides',     requireAuth, slidesRouter);
 app.use('/api/playlists',  requireAuth, playlistRouter);

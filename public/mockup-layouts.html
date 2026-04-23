@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PixelPlein — Layout Mockups</title>
+<style>
+
+/* ── Reset & base ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #080808;
+  color: #fff;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 20px 48px;
+}
+
+h1 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.38);
+  text-transform: uppercase;
+  margin-bottom: 18px;
+}
+h1 em { color: rgba(255,255,255,0.82); font-style: normal; }
+
+/* ── Tabs ─────────────────────────────────────────────────── */
+.tabs {
+  display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
+  margin-bottom: 20px;
+}
+.tab {
+  padding: 6px 15px;
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.48);
+  cursor: pointer; font-size: 0.8rem; font-weight: 600;
+  transition: all 0.15s; letter-spacing: 0.02em;
+}
+.tab:hover  { background: rgba(255,255,255,0.09); color: rgba(255,255,255,0.8); }
+.tab.active { background: rgba(255,255,255,0.13); color: #fff; border-color: rgba(255,255,255,0.28); }
+
+/* ── 16:9 Screen ──────────────────────────────────────────── */
+.screen-wrap {
+  width: min(92vw, 1040px);
+  aspect-ratio: 16 / 9;
+  position: relative;
+  border-radius: 6px; overflow: hidden;
+  background: #111;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.07), 0 28px 70px rgba(0,0,0,0.8);
+}
+
+/* ── Layout panels ────────────────────────────────────────── */
+.layout-panel { position: absolute; inset: 0; display: none; }
+.layout-panel.active { display: block; }
+
+/* ── Photo gradients ──────────────────────────────────────── */
+.photo-bg { position: absolute; inset: 0; }
+.p1 { background: linear-gradient(170deg, #0b2340 0%, #1a4f8a 55%, #2472b5 100%); }
+.p2 { background: linear-gradient(170deg, #3d1200 0%, #8a320f 55%, #c75520 100%); }
+.p3 { background: linear-gradient(170deg, #071d0e 0%, #104a24 55%, #1a7038 100%); }
+.p4 { background: linear-gradient(170deg, #221700 0%, #5e3f08 55%, #a87010 100%); }
+.p5 { background: linear-gradient(170deg, #100630 0%, #3a1278 55%, #6535b8 100%); }
+.p6 { background: linear-gradient(170deg, #031624 0%, #0a5268 55%, #0e96b0 100%); }
+.p7 { background: linear-gradient(170deg, #280e00 0%, #70380e 55%, #b06020 100%); }
+.p8 { background: linear-gradient(170deg, #030510 0%, #0a1435 55%, #142460 100%); }
+
+.photo-label {
+  position: absolute; bottom: 9px; left: 10px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.32); text-transform: uppercase;
+  pointer-events: none; user-select: none;
+}
+
+/* ── Ken Burns ────────────────────────────────────────────── */
+@keyframes kb-1 { from { transform: scale(1.00) translate(0%,   0%);   } to { transform: scale(1.07) translate(-2%,  -1.5%); } }
+@keyframes kb-2 { from { transform: scale(1.07) translate(2%,   1.5%); } to { transform: scale(1.00) translate(0%,   0%);   } }
+@keyframes kb-3 { from { transform: scale(1.00) translate(2%,  -1%);   } to { transform: scale(1.06) translate(-1%,  1.5%); } }
+.kb-1 { animation: kb-1 10s ease-in-out both; }
+.kb-2 { animation: kb-2 10s ease-in-out both; }
+.kb-3 { animation: kb-3 10s ease-in-out both; }
+
+/* ── Generic swap fade ────────────────────────────────────── */
+@keyframes swap-in { from { opacity: 0; } to { opacity: 1; } }
+.swap-in { animation: swap-in 0.55s ease both; }
+
+/* ══════════════════════════════════════════════════════════
+   DYNAMIC SPLIT
+══════════════════════════════════════════════════════════ */
+#panel-split .photo-a {
+  position: absolute; inset: 0; overflow: hidden; z-index: 2;
+  clip-path: inset(0 0% 0 0);
+  transition: clip-path 0.85s cubic-bezier(0.22, 1, 0.36, 1);
+}
+#panel-split .photo-a.split { clip-path: inset(0 50% 0 0); }
+
+#panel-split .photo-b {
+  position: absolute; inset: 0; overflow: hidden; z-index: 1;
+  clip-path: inset(0 0 0 50%);
+}
+
+#panel-split .split-line {
+  position: absolute; top: 0; bottom: 0; z-index: 10;
+  left: calc(50% - 1px); width: 2px;
+  background: rgba(255,255,255,0.16);
+  opacity: 0;
+  transition: opacity 0.35s 0.7s;
+}
+#panel-split .split-line.on { opacity: 1; }
+
+/* ══════════════════════════════════════════════════════════
+   PICTURE-IN-PICTURE
+══════════════════════════════════════════════════════════ */
+#panel-pip .main-wrap { position: absolute; inset: 0; overflow: hidden; }
+
+#panel-pip .pip-wrap {
+  position: absolute; z-index: 10;
+  width: 29%; aspect-ratio: 16 / 9;
+  bottom: 18px; right: 18px;
+  border-radius: 5px; overflow: hidden;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.16), 0 10px 36px rgba(0,0,0,0.7);
+  opacity: 0;
+  transform: translateY(10px) scale(0.93);
+  transition: opacity 0.5s cubic-bezier(0.22,1,0.36,1),
+              transform 0.5s cubic-bezier(0.22,1,0.36,1);
+}
+#panel-pip .pip-wrap.on { opacity: 1; transform: none; }
+#panel-pip .pip-inner { position: absolute; inset: 0; }
+
+/* ══════════════════════════════════════════════════════════
+   FILMSTRIP PAN
+══════════════════════════════════════════════════════════ */
+#panel-filmstrip { background: #080808; overflow: hidden; }
+
+#panel-filmstrip .strip {
+  position: absolute; top: 5%; bottom: 5%; left: 0;
+  display: flex; gap: 4px; will-change: transform;
+}
+#panel-filmstrip .strip-photo {
+  flex: none; height: 100%;
+  border-radius: 3px; overflow: hidden; position: relative;
+}
+
+/* ══════════════════════════════════════════════════════════
+   TRIPTYCH
+══════════════════════════════════════════════════════════ */
+#panel-triptych .tri-grid {
+  position: absolute; inset: 0;
+  display: flex; gap: 3px;
+}
+.tri-panel { flex: 1; position: relative; overflow: hidden; }
+.tri-photo  { position: absolute; inset: 0; }
+
+@keyframes tri-left  { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes tri-top   { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes tri-right { from { clip-path: inset(0 0 0 100%); } to { clip-path: inset(0 0 0 0); } }
+.tri-from-left  { animation: tri-left  0.72s cubic-bezier(0.22,1,0.36,1) 0.00s both; }
+.tri-from-top   { animation: tri-top   0.72s cubic-bezier(0.22,1,0.36,1) 0.16s both; }
+.tri-from-right { animation: tri-right 0.72s cubic-bezier(0.22,1,0.36,1) 0.32s both; }
+
+/* ══════════════════════════════════════════════════════════
+   CASCADE
+══════════════════════════════════════════════════════════ */
+#panel-cascade .cas-grid {
+  position: absolute; inset: 0;
+  display: grid;
+  grid-template-columns: 1.35fr 0.65fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 3px;
+}
+.cas-zone { position: relative; overflow: hidden; }
+.cas-zone.tall { grid-row: span 2; }
+.cas-photo { position: absolute; inset: 0; }
+
+@keyframes cas-in { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: scale(1); } }
+.cas-enter { animation: cas-in 0.8s cubic-bezier(0.22,1,0.36,1) both; }
+
+/* ── Footer ───────────────────────────────────────────────── */
+.footer {
+  margin-top: 16px;
+  width: min(92vw, 1040px);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.status {
+  font-size: 0.76rem; color: rgba(255,255,255,0.38); flex: 1; line-height: 1.5;
+}
+.status strong { color: rgba(255,255,255,0.78); }
+.replay-btn {
+  flex: none; padding: 5px 14px;
+  border-radius: 6px; border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.52);
+  cursor: pointer; font-size: 0.76rem; font-weight: 600; transition: all 0.15s;
+}
+.replay-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.desc {
+  width: min(92vw, 1040px); margin-top: 10px;
+  font-size: 0.73rem; color: rgba(255,255,255,0.28); line-height: 1.65;
+}
+
+</style>
+</head>
+<body>
+
+<h1>PixelPlein — <em>New Layout Concepts</em></h1>
+
+<div class="tabs">
+  <button class="tab active" data-layout="split">Dynamic Split</button>
+  <button class="tab" data-layout="pip">Picture-in-Picture</button>
+  <button class="tab" data-layout="filmstrip">Filmstrip Pan</button>
+  <button class="tab" data-layout="triptych">Triptych</button>
+  <button class="tab" data-layout="cascade">Cascade</button>
+</div>
+
+<div class="screen-wrap">
+
+  <!-- DYNAMIC SPLIT -->
+  <div id="panel-split" class="layout-panel active">
+    <div class="photo-a">
+      <div class="photo-bg p1 kb-1"></div>
+      <div class="photo-label">Photo 1</div>
+    </div>
+    <div class="photo-b">
+      <div class="photo-bg p2"></div>
+      <div class="photo-label">Photo 2</div>
+    </div>
+    <div class="split-line"></div>
+  </div>
+
+  <!-- PICTURE-IN-PICTURE -->
+  <div id="panel-pip" class="layout-panel">
+    <div class="main-wrap">
+      <div class="photo-bg p3 kb-1"></div>
+      <div class="photo-label">Photo 1</div>
+    </div>
+    <div class="pip-wrap">
+      <div class="pip-inner">
+        <div class="photo-bg p4"></div>
+        <div class="photo-label">Photo 2</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FILMSTRIP PAN -->
+  <div id="panel-filmstrip" class="layout-panel">
+    <div class="strip" id="strip-track">
+      <div class="strip-photo"><div class="photo-bg p1"></div><div class="photo-label">Photo 1</div></div>
+      <div class="strip-photo"><div class="photo-bg p3"></div><div class="photo-label">Photo 2</div></div>
+      <div class="strip-photo"><div class="photo-bg p5"></div><div class="photo-label">Photo 3</div></div>
+      <div class="strip-photo"><div class="photo-bg p7"></div><div class="photo-label">Photo 4</div></div>
+      <div class="strip-photo"><div class="photo-bg p2"></div><div class="photo-label">Photo 5</div></div>
+      <div class="strip-photo"><div class="photo-bg p4"></div><div class="photo-label">Photo 6</div></div>
+      <div class="strip-photo"><div class="photo-bg p6"></div><div class="photo-label">Photo 7</div></div>
+    </div>
+  </div>
+
+  <!-- TRIPTYCH -->
+  <div id="panel-triptych" class="layout-panel">
+    <div class="tri-grid">
+      <div class="tri-panel" id="tri-a">
+        <div class="tri-photo p5"><div class="photo-label">Photo 1</div></div>
+      </div>
+      <div class="tri-panel" id="tri-b">
+        <div class="tri-photo p6"><div class="photo-label">Photo 2</div></div>
+      </div>
+      <div class="tri-panel" id="tri-c">
+        <div class="tri-photo p7"><div class="photo-label">Photo 3</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CASCADE -->
+  <div id="panel-cascade" class="layout-panel">
+    <div class="cas-grid">
+      <div class="cas-zone tall" id="cas-a">
+        <div class="cas-photo p8"><div class="photo-label">Photo 1</div></div>
+      </div>
+      <div class="cas-zone" id="cas-b">
+        <div class="cas-photo p2"><div class="photo-label">Photo 2</div></div>
+      </div>
+      <div class="cas-zone" id="cas-c">
+        <div class="cas-photo p4"><div class="photo-label">Photo 3</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <div class="status" id="status"></div>
+  <button class="replay-btn" id="replay">↺ Replay</button>
+</div>
+<div class="desc" id="desc"></div>
+
+<script>
+
+/* ── Timer helpers ────────────────────────────────────────── */
+let timers = [];
+const after      = (ms, fn) => { const id = setTimeout(fn, ms); timers.push(id); };
+const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+const setStatus  = msg => { document.getElementById('status').innerHTML = msg; };
+
+/* Append a fade-in overlay to a container (mirrors crossFadeSlot) */
+function fadePhoto(container, colorClass, label) {
+  const el  = document.createElement('div');
+  el.className = `photo-bg ${colorClass} swap-in`;
+  el.style.cssText = 'position:absolute;inset:0';
+  const lbl = document.createElement('div');
+  lbl.className   = 'photo-label';
+  lbl.textContent = label;
+  el.appendChild(lbl);
+  container.appendChild(el);
+}
+
+/* ── Layout definitions ───────────────────────────────────── */
+const LAYOUTS = {
+
+  /* ── Dynamic Split ──────────────────────────────────────── */
+  split: {
+    desc: 'Starts fullscreen with Ken Burns on the hero. At ~35% of the layout duration a divider wipes in and the frame splits 50/50 — proportional timing identical to mosaic tile swaps. Both halves can run independent Ken Burns after the reveal.',
+    play() {
+      const photoA = document.querySelector('#panel-split .photo-a');
+      const photoB = document.querySelector('#panel-split .photo-b');
+      const line   = document.querySelector('#panel-split .split-line');
+      const bgA    = photoA.querySelector('.photo-bg');
+      const bgB    = photoB.querySelector('.photo-bg');
+
+      photoA.classList.remove('split');
+      line.classList.remove('on');
+      bgA.className = 'photo-bg p1';
+      bgB.className = 'photo-bg p2';
+      void bgA.offsetWidth;
+      bgA.classList.add('kb-1');
+
+      setStatus('<strong>Phase 1</strong> — fullscreen hero with Ken Burns');
+
+      after(3500, () => {
+        setStatus('<strong>Splitting</strong> — wipe divides the frame, second photo reveals…');
+        photoA.classList.add('split');
+        line.classList.add('on');
+        bgB.className = 'photo-bg p2 kb-2';
+        void bgB.offsetWidth;
+      });
+
+      after(4600, () => {
+        setStatus('<strong>Phase 2</strong> — side-by-side, each panel with its own Ken Burns');
+      });
+    },
+  },
+
+  /* ── Picture-in-Picture ─────────────────────────────────── */
+  pip: {
+    desc: 'Hero fills the screen with Ken Burns. A PiP panel slides in from the corner at ~35% of the cycle. It then independently cross-fades to a new photo at ~65% — timing derived proportionally from layoutDuration, same as mosaic postMount.',
+    play() {
+      const pip      = document.querySelector('#panel-pip .pip-wrap');
+      const pipInner = document.querySelector('#panel-pip .pip-inner');
+      const mainBg   = document.querySelector('#panel-pip .main-wrap .photo-bg');
+
+      pip.classList.remove('on');
+      mainBg.className = 'photo-bg p3';
+      pipInner.innerHTML = '<div class="photo-bg p4"></div><div class="photo-label">Photo 2</div>';
+      void mainBg.offsetWidth;
+      mainBg.classList.add('kb-1');
+
+      setStatus('<strong>Phase 1</strong> — fullscreen hero with Ken Burns');
+
+      after(3000, () => {
+        setStatus('<strong>PiP slides in</strong> — corner panel appears with second photo');
+        pip.classList.add('on');
+      });
+
+      after(6500, () => {
+        setStatus('<strong>PiP swaps</strong> — corner panel cross-fades to new photo');
+        fadePhoto(pipInner, 'p6', 'Photo 3');
+      });
+    },
+  },
+
+  /* ── Filmstrip Pan ──────────────────────────────────────── */
+  filmstrip: {
+    desc: 'A row of 7+ photos taller than the screen pans slowly left. Pan speed and total distance are computed from layoutDuration. At cycle end the strip resets with a fresh photo selection — no hard cuts, one continuous cinematic motion.',
+    play() {
+      const outer  = document.getElementById('panel-filmstrip');
+      const track  = document.getElementById('strip-track');
+      const outerW = outer.offsetWidth;
+      const outerH = outer.offsetHeight;
+      /* Slightly portrait-cropped feel: photos are 82% of 16:9 at the strip height */
+      const photoW = Math.round(outerH * 0.9 * (16 / 9) * 0.82);
+      const gap    = 4;
+      const photos = track.querySelectorAll('.strip-photo');
+
+      photos.forEach(p => { p.style.width = photoW + 'px'; });
+
+      const trackW  = photos.length * photoW + (photos.length - 1) * gap;
+      const panDist = Math.max(0, trackW - outerW + 16);
+
+      track.getAnimations().forEach(a => a.cancel());
+      track.style.transform = '';
+
+      setStatus('<strong>Filmstrip Pan</strong> — slow cinematic scroll through the event');
+
+      track.animate(
+        [{ transform: 'translateX(0)' }, { transform: `translateX(-${panDist}px)` }],
+        { duration: 13000, easing: 'cubic-bezier(0.22, 0.05, 0.3, 0.95)', fill: 'forwards' },
+      );
+
+      after(6500, () => {
+        setStatus('<strong>Filmstrip Pan</strong> — many shots, one continuous motion, no cuts');
+      });
+    },
+  },
+
+  /* ── Triptych ───────────────────────────────────────────── */
+  triptych: {
+    desc: 'Three equal panels enter staggered from different directions (left → top → right). After settling each panel independently cross-fades to a new photo using the same proportional postMount delay. Minimum 3 photos required.',
+    play() {
+      const pA = document.getElementById('tri-a');
+      const pB = document.getElementById('tri-b');
+      const pC = document.getElementById('tri-c');
+
+      const reset = (panel, cls, label) => {
+        panel.innerHTML = `<div class="tri-photo ${cls}"><div class="photo-label">${label}</div></div>`;
+      };
+      reset(pA, 'p5', 'Photo 1');
+      reset(pB, 'p6', 'Photo 2');
+      reset(pC, 'p7', 'Photo 3');
+      void pA.offsetWidth;
+
+      pA.querySelector('.tri-photo').classList.add('tri-from-left');
+      pB.querySelector('.tri-photo').classList.add('tri-from-top');
+      pC.querySelector('.tri-photo').classList.add('tri-from-right');
+
+      setStatus('<strong>Entrance</strong> — three panels wipe in from different directions');
+      after(1400, () => setStatus('<strong>Settled</strong> — all panels visible'));
+      after(5000, () => { setStatus('<strong>Panel 1 swaps</strong> — independent cross-fade'); fadePhoto(pA, 'p3', 'Photo 4'); });
+      after(6800, () => { setStatus('<strong>Panel 3 swaps</strong> — staggered independent refresh'); fadePhoto(pC, 'p2', 'Photo 5'); });
+      after(8400, () => { setStatus('<strong>Panel 2 swaps</strong> — all panels now refreshed at different times'); fadePhoto(pB, 'p4', 'Photo 6'); });
+    },
+  },
+
+  /* ── Cascade ────────────────────────────────────────────── */
+  cascade: {
+    desc: 'An asymmetric grid of zones fades in staggered (0 → 350 → 700 ms). Each zone then runs its own swap timer at a different offset — the display stays alive without feeling chaotic. No hero, all zones are equal weight.',
+    play() {
+      const zA = document.getElementById('cas-a');
+      const zB = document.getElementById('cas-b');
+      const zC = document.getElementById('cas-c');
+
+      const reset = (zone, cls, label, delay) => {
+        zone.innerHTML = `<div class="cas-photo ${cls} cas-enter" style="animation-delay:${delay}ms"><div class="photo-label">${label}</div></div>`;
+      };
+      reset(zA, 'p8', 'Photo 1',   0);
+      reset(zB, 'p2', 'Photo 2', 350);
+      reset(zC, 'p4', 'Photo 3', 700);
+
+      setStatus('<strong>Staggered reveal</strong> — each zone fades in independently');
+      after(1400, () => setStatus('<strong>All zones live</strong> — each running its own swap cadence'));
+      after(3500, () => { setStatus('<strong>Zone 2 swaps</strong>'); fadePhoto(zB, 'p5', 'Photo 4'); });
+      after(5500, () => { setStatus('<strong>Zone 1 swaps</strong> — hero zone refreshes'); fadePhoto(zA, 'p7', 'Photo 5'); });
+      after(7800, () => { setStatus('<strong>Zone 3 swaps</strong> — constant gentle movement across all zones'); fadePhoto(zC, 'p1', 'Photo 6'); });
+    },
+  },
+
+};
+
+/* ── Tab switching ────────────────────────────────────────── */
+let current = 'split';
+
+function showLayout(name) {
+  clearTimers();
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.layout === name));
+  document.querySelectorAll('.layout-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
+  document.getElementById('desc').textContent = LAYOUTS[name]?.desc ?? '';
+  current = name;
+  after(40, () => LAYOUTS[name]?.play());
+}
+
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showLayout(t.dataset.layout)));
+document.getElementById('replay').addEventListener('click', () => showLayout(current));
+
+showLayout('split');
+
+</script>
+</body>
+</html>

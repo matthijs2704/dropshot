@@ -10,6 +10,7 @@ const {
   listScreenDevices,
   approveScreenDevice,
   revokeScreenDevice,
+  deleteScreenDevice,
   updateScreenDevice,
 } = require('./devices');
 
@@ -124,6 +125,16 @@ adminRouter.delete('/devices/:deviceId', async (req, res) => {
     const device = await revokeScreenDevice(req.params.deviceId);
     broadcast({ type: 'screen_pairing_update' });
     broadcastToScreens({ type: 'screen_revoked', deviceId: req.params.deviceId });
+    return res.json({ ok: true, device });
+  } catch (err) {
+    return res.status(404).json({ ok: false, error: err.message });
+  }
+});
+
+adminRouter.post('/devices/:deviceId/delete', async (req, res) => {
+  try {
+    const device = await deleteScreenDevice(req.params.deviceId);
+    broadcast({ type: 'screen_pairing_update' });
     return res.json({ ok: true, device });
   } catch (err) {
     return res.status(404).json({ ok: false, error: err.message });

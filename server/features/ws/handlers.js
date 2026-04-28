@@ -105,6 +105,17 @@ async function _handleScreenAuth(ws, msg) {
     return;
   }
 
+  // If device has wrong screenId, tell it to reload with correct screenId
+  if (device.wrongScreenId) {
+    ws.send(JSON.stringify({
+      type: 'device_reassigned',
+      deviceId: device.deviceId,
+      screenId: device.screenId,
+    }));
+    ws.close(1000, 'screen reassigned');
+    return;
+  }
+
   ws.authenticated = true;
   ws.clientType = 'screen';
   ws.deviceId = device.deviceId;
@@ -128,6 +139,17 @@ async function _handleAgentAuth(ws, msg) {
   if (!device) {
     ws.send(JSON.stringify({ type: 'agent_auth_failed' }));
     ws.close(1008, 'agent auth failed');
+    return;
+  }
+
+  // If device has wrong screenId, tell it to update config
+  if (device.wrongScreenId) {
+    ws.send(JSON.stringify({
+      type: 'device_reassigned',
+      deviceId: device.deviceId,
+      screenId: device.screenId,
+    }));
+    ws.close(1000, 'screen reassigned');
     return;
   }
 

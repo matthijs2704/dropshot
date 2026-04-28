@@ -129,6 +129,12 @@ export async function revokeScreenDevice(deviceId) {
   });
 }
 
+export async function deleteScreenDevice(deviceId) {
+  return apiFetch(`/api/screens/devices/${encodeURIComponent(deviceId)}/delete`, {
+    method: 'POST',
+  });
+}
+
 export async function updateScreenDevice(deviceId, payload) {
   return apiFetch(`/api/screens/devices/${encodeURIComponent(deviceId)}`, {
     method: 'PATCH',

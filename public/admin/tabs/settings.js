@@ -9,6 +9,7 @@ import {
   loadScreenDevices,
   approveScreenDevice,
   revokeScreenDevice,
+  deleteScreenDevice,
   updateScreenDevice,
   sendScreenDeviceCommand,
 } from '../api.js';
@@ -389,6 +390,21 @@ async function _loadScreenDevicesSection() {
         }
       });
     });
+
+    pairedEl.querySelectorAll('[data-delete-screen-device]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const deviceId = btn.getAttribute('data-delete-screen-device');
+        if (!window.confirm('Permanently delete this device? This cannot be undone.')) return;
+
+        try {
+          await deleteScreenDevice(deviceId);
+          _toast('Device deleted');
+          await _loadScreenDevicesSection();
+        } catch (err) {
+          _toast(err.message, true);
+        }
+      });
+    });
   } catch (err) {
     pendingEl.innerHTML = '';
     pairedEl.innerHTML = `<div class="quick-hint" style="color:var(--red)">${_esc(err.message || 'Failed to load screen devices')}</div>`;
@@ -443,6 +459,7 @@ function _renderDeviceRow(d) {
         <button class="btn btn-danger btn-sm" data-screen-device-command="reboot" data-device-id="${_esc(d.deviceId)}" ${disabled}>Reboot</button>
         <button class="btn btn-danger btn-sm" data-screen-device-command="shutdown" data-device-id="${_esc(d.deviceId)}" ${disabled}>Shutdown</button>
         <button class="btn btn-danger btn-sm" data-revoke-screen-device="${_esc(d.deviceId)}" ${d.revokedAt ? 'disabled' : ''}>Revoke</button>
+        ${d.revokedAt ? `<button class="btn btn-danger btn-sm" data-delete-screen-device="${_esc(d.deviceId)}">Delete</button>` : ''}
       </div>
     </div>
   `;

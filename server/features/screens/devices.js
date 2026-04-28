@@ -203,6 +203,21 @@ async function revokeScreenDevice(deviceId) {
   return _publicDevice(device);
 }
 
+async function deleteScreenDevice(deviceId) {
+  const cleanDeviceId = _cleanDeviceId(deviceId);
+  const store = await _loadStore();
+  const device = store.devices.find(d => d.deviceId === cleanDeviceId);
+  if (!device) throw new Error('Screen device not found');
+  
+  // Remove device from store
+  store.devices = store.devices.filter(d => d.deviceId !== cleanDeviceId);
+  // Also remove any pending pairing requests
+  store.pending = store.pending.filter(p => p.deviceId !== cleanDeviceId);
+  
+  await _saveStore(store);
+  return _publicDevice(device);
+}
+
 async function updateScreenDevice(deviceId, patch = {}) {
   const cleanDeviceId = _cleanDeviceId(deviceId);
   const store = await _loadStore();
@@ -233,7 +248,14 @@ async function verifyScreenToken({ deviceId, token, screenId }) {
   );
   if (!device) return null;
 
-  if (screenId && _cleanScreenId(screenId) !== device.screenId) return null;
+  // Check if screenId matches - if not, return device with wrongScreenId flag
+  if (screenId && _cleanScreenId(screenId) !== device.screenId) {
+    return {
+      ..._publicDevice(device),
+      wrongScreenId: true,
+      requestedScreenId: _cleanScreenId(screenId),
+    };
+  }
 
   device.lastSeenAt = _now();
   await _saveStore(store);
@@ -246,6 +268,7 @@ module.exports = {
   listScreenDevices,
   approveScreenDevice,
   revokeScreenDevice,
+  deleteScreenDevice,
   updateScreenDevice,
   verifyScreenToken,
 };

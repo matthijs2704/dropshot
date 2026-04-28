@@ -39,6 +39,20 @@ function broadcastToScreenAgent(deviceId, payload) {
   return sent;
 }
 
+/** Send a payload to a specific screen display by deviceId */
+function broadcastToScreenDevice(deviceId, payload) {
+  if (!_wss) return false;
+  const msg = JSON.stringify(payload);
+  let sent = false;
+  _wss.clients.forEach(ws => {
+    if (ws.readyState === 1 && ws.clientType === 'screen' && ws.deviceId === deviceId) {
+      ws.send(msg);
+      sent = true;
+    }
+  });
+  return sent;
+}
+
 function _getWss() { return _wss; }
 
-module.exports = { setWss, broadcast, broadcastToScreens, broadcastToScreenAgent, _getWss };
+module.exports = { setWss, broadcast, broadcastToScreens, broadcastToScreenAgent, broadcastToScreenDevice, _getWss };

@@ -514,6 +514,18 @@ function _connectAgentWs(config) {
             _agentWs.send(JSON.stringify({ type: 'agent_command_result', commandId, command, ok: false, error: err.message }));
           }
         });
+      return;
+    }
+
+    if (msg.type === 'device_reassigned') {
+      // Admin changed this device's screen assignment
+      if (msg.screenId) {
+        console.log(`[agent] Device reassigned to screen ${msg.screenId}, updating config and restarting kiosk`);
+        _saveAgentPatch({ screenId: msg.screenId })
+          .then(() => _restartKiosk())
+          .catch(err => console.error('[agent] Failed to apply reassignment:', err));
+      }
+      return;
     }
   });
 

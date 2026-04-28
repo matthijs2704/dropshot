@@ -3,7 +3,7 @@
 const express = require('express');
 const os      = require('os');
 
-const { broadcast, broadcastToScreens, broadcastToScreenAgent, _getWss } = require('../ws/broadcast');
+const { broadcast, broadcastToScreens, broadcastToScreenAgent, broadcastToScreenDevice, _getWss } = require('../ws/broadcast');
 const {
   requestPairing,
   getPairingStatus,
@@ -137,7 +137,15 @@ adminRouter.patch('/devices/:deviceId', async (req, res) => {
     
     // If screenId changed, notify the device to reload with new screenId
     if (oldDevice && oldDevice.screenId !== device.screenId) {
-      broadcastToScreens({
+      console.log(`[device-routes] Device ${device.deviceId} reassigned from screen ${oldDevice.screenId} to ${device.screenId}`);
+      const sent = broadcastToScreenDevice(device.deviceId, {
+        type: 'device_reassigned',
+        deviceId: device.deviceId,
+        screenId: device.screenId,
+      });
+      console.log(`[device-routes] Reassignment message sent: ${sent}`);
+      // Also notify the agent if connected
+      broadcastToScreenAgent(device.deviceId, {
         type: 'device_reassigned',
         deviceId: device.deviceId,
         screenId: device.screenId,

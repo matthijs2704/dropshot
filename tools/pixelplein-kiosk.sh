@@ -95,6 +95,10 @@ main() {
 		log_info "Launching Chromium with URL: ${url%%#*}" # Log without credentials
 
 		# Launch Chromium in kiosk mode
+		# Hardware acceleration flags:
+		# - ignore-gpu-blocklist: Allow GPU on blocklisted hardware
+		# - enable-gpu-rasterization: Use GPU for rasterization
+		# - enable-zero-copy: Reduce memory copies for better performance
 		"$chromium_bin" \
 			--kiosk \
 			--noerrdialogs \
@@ -107,6 +111,9 @@ main() {
 			--autoplay-policy=no-user-gesture-required \
 			--disable-features=TranslateUI \
 			--disable-breakpad \
+			--ignore-gpu-blocklist \
+			--enable-gpu-rasterization \
+			--enable-zero-copy \
 			"$url" 2>&1 | while IFS= read -r line; do
 			# Only log errors and important messages
 			if [[ "$line" =~ (ERROR|FATAL|Failed) ]]; then

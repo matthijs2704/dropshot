@@ -225,7 +225,7 @@ async function applyProvisioning(raw) {
   await _applyLocalServer(config);
   _lastAppliedAt = Date.now();
   _lastError = '';
-  _scheduleAgentConnect(500);
+  _scheduleAgentConnect(0);
   return config;
 }
 
@@ -369,16 +369,24 @@ async function _ensureAgentDeviceId(config) {
 }
 
 async function _agentApi(config, pathName, payload) {
-  const res = await fetch(`${config.serverUrl}${pathName}`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify(payload || {}),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return await res.json();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(`${config.serverUrl}${pathName}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload || {}),
+      signal:  controller.signal,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function _requestAgentPairing(config) {
+  console.log(`[agent] requesting pairing for ${config.agent.deviceId} at ${config.serverUrl}`);
   const result = await _agentApi(config, '/api/screens/pair/request', {
     deviceId: config.agent.deviceId,
     screenId: config.screenId,
@@ -411,6 +419,7 @@ async function _requestAgentPairing(config) {
 
 async function _pollAgentPairing(config) {
   if (!config.agent?.pairingSecret) return config;
+  console.log(`[agent] polling pairing status for ${config.agent.deviceId}`);
   const result = await _agentApi(config, '/api/screens/pair/status', {
     deviceId:      config.agent.deviceId,
     pairingSecret: config.agent.pairingSecret,
@@ -653,6 +662,7 @@ function _page(status) {
   const modeLabel  = cfg?.localServer?.enabled === false ? 'Extern' : 'Lokaal';
   const screenUrl  = _esc(status?.screenUrl || '');
   const agent       = status?.agent || {};
+  const agentSig    = `${agent.connected ? '1' : '0'}|${agent.pairingCode || ''}|${agent.lastError || ''}`;
   const configJson = cfg ? _esc(JSON.stringify({ serverUrl: cfg.serverUrl, screenId: cfg.screenId, deviceLabel: cfg.deviceLabel }, null, 2)) : '';
 
   return `<!doctype html>
@@ -694,6 +704,7 @@ pre{background:#0d151e;padding:12px;border-radius:8px;font-size:12px;white-space
   <div class="row"><span class="label">LAN IP's</span><span class="val">${_esc(ips)}</span></div>
   <div class="row"><span class="label">Server</span><span class="pill ${running ? 'on' : 'off'}">${running ? 'Actief' : 'Gestopt'}</span></div>
   <div class="row"><span class="label">Agent</span><span class="pill ${agent.connected ? 'on' : 'off'}">${agent.connected ? 'Verbonden' : (agent.pairingCode ? `Koppelcode ${_esc(agent.pairingCode)}` : 'Niet verbonden')}</span></div>
+  ${agent.lastError ? `<div class="error">Agent: ${_esc(agent.lastError)}</div>` : ''}
   <div class="row"><span class="label">Modus</span><span class="val">${_esc(modeLabel)}</span></div>
   ${cfg ? `<div class="row"><span class="label">Scherm URL</span><span class="val" style="font-size:12px">${screenUrl}</span></div>` : ''}
 </div>
@@ -722,12 +733,14 @@ pre{background:#0d151e;padding:12px;border-radius:8px;font-size:12px;white-space
 </div>
 
 <script>
+const initialAgentSig = ${JSON.stringify(agentSig)};
 async function api(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});return r.json();}
 function msg(id,text,ok){const el=document.getElementById(id);if(el){el.textContent=text;el.className=ok?'success':'error';}}
 async function scanUsb(){msg('usb-msg','Bezig…',true);const r=await api('/api/scan-usb');msg('usb-msg',r.ok?(r.config?'Toegepast: '+r.config.serverUrl:'Geen bestand gevonden'):('Fout: '+r.error),r.ok&&r.config);}
-async function saveConfig(){try{const val=document.getElementById('config').value;const r=await api('/api/apply',JSON.parse(val));msg('cfg-msg',r.ok?'Toegepast':'Fout: '+r.error,r.ok);}catch(e){msg('cfg-msg','Ongeldige JSON: '+e.message,false);}}
+async function saveConfig(){try{const val=document.getElementById('config').value;const r=await api('/api/apply',JSON.parse(val));msg('cfg-msg',r.ok?'Toegepast':'Fout: '+r.error,r.ok);if(r.ok)setTimeout(()=>location.reload(),1000);}catch(e){msg('cfg-msg','Ongeldige JSON: '+e.message,false);}}
 async function launchScreen(){const r=await api('/api/launch');if(!r.ok)alert(r.error||'Launch mislukt');}
 async function scanWifi(){const el=document.getElementById('wifi');el.style.display='block';el.textContent='Bezig…';const r=await fetch('/api/wifi').then(x=>x.json());el.textContent=JSON.stringify(r.networks||r,null,2);}
+setInterval(async()=>{try{const r=await fetch('/api/status').then(x=>x.json());const a=r.agent||{};const sig=(a.connected?'1':'0')+'|'+(a.pairingCode||'')+'|'+(a.lastError||'');if(sig!==initialAgentSig)location.reload();}catch{}},3000);
 </script>
 </body></html>`;
 }

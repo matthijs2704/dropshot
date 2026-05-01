@@ -51,13 +51,28 @@ configure_apt_sources() {
 			fi
 		done
 
+	# If a previous installer run added Debian components to a third-party
+	# NodeSource repo, repair it. NodeSource only publishes the "main"
+	# component.
+	find /etc/apt -type f -name '*.list' -print0 2>/dev/null |
+		while IFS= read -r -d '' file; do
+			sed -i -E '/deb\.nodesource\.com/ s#(deb([[:space:]]+\[[^]]+\])?[[:space:]]+[^[:space:]]*deb\.nodesource\.com[^[:space:]]*[[:space:]]+[^[:space:]]+[[:space:]]+).*#\1main#' "$file"
+		done
+
+	find /etc/apt -type f -name '*.sources' -print0 2>/dev/null |
+		while IFS= read -r -d '' file; do
+			if grep -q 'deb\.nodesource\.com' "$file"; then
+				sed -i -E 's/^Components:.*/Components: main/' "$file"
+			fi
+		done
+
 	if [[ "$os_id" != "debian" && "$os_id" != "raspbian" ]]; then
 		return
 	fi
 
 	find /etc/apt -type f -name '*.list' -print0 2>/dev/null |
 		while IFS= read -r -d '' file; do
-			sed -i -E '/^[[:space:]]*deb[[:space:]]/ {
+			sed -i -E '/^[[:space:]]*deb[[:space:]].*(debian|raspbian|raspberrypi)/ {
 				/ contrib/! s/[[:space:]]+main([[:space:]]|$)/ main contrib\1/
 				/ non-free-firmware/! s/[[:space:]]+contrib([[:space:]]|$)/ contrib non-free-firmware\1/
 				/ non-free([[:space:]]|$)/! s/[[:space:]]+non-free-firmware([[:space:]]|$)/ non-free non-free-firmware\1/
@@ -66,7 +81,7 @@ configure_apt_sources() {
 
 	find /etc/apt -type f -name '*.sources' -print0 2>/dev/null |
 		while IFS= read -r -d '' file; do
-			if grep -q '^Components:' "$file"; then
+			if grep -qE '^URIs:.*(debian|raspbian|raspberrypi)' "$file" && grep -q '^Components:' "$file"; then
 				sed -i -E '/^Components:/ {
 					/ contrib/! s/$/ contrib/
 					/ non-free-firmware/! s/$/ non-free-firmware/

@@ -7,7 +7,8 @@ set -euo pipefail
 readonly CONFIG_FILE="$HOME/.config/pixelplein-screen/config.json"
 readonly DEFAULT_URL="http://127.0.0.1:3987"
 readonly LOG_TAG="pixelplein-kiosk"
-readonly DEFAULT_CHROMIUM_EXTRA_FLAGS="--disable-gpu-compositing --disable-gpu-rasterization --disable-zero-copy"
+readonly DEFAULT_CHROMIUM_EXTRA_FLAGS="--use-gl=egl --enable-gpu-rasterization"
+readonly KIOSK_BACKEND="${PIXELPLEIN_KIOSK_BACKEND:-wayland}"
 
 # Logging helpers (uses systemd journal when available)
 log_info() {
@@ -79,6 +80,29 @@ find_chromium() {
 	fi
 }
 
+launch_cage_if_needed() {
+	if [[ "$KIOSK_BACKEND" != "wayland" || -n "${WAYLAND_DISPLAY:-}" ]]; then
+		return
+	fi
+
+	if ! command -v cage &>/dev/null; then
+		log_error "Cage not found; install the cage package or set PIXELPLEIN_KIOSK_BACKEND=x11"
+		exit 1
+	fi
+
+	if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
+		export XDG_RUNTIME_DIR="/tmp/pixelplein-runtime-$(id -u)"
+	fi
+	mkdir -p "$XDG_RUNTIME_DIR"
+	chmod 700 "$XDG_RUNTIME_DIR"
+
+	log_info "Starting Wayland kiosk session with Cage"
+	if command -v dbus-run-session &>/dev/null; then
+		exec dbus-run-session -- cage -s -- "$0"
+	fi
+	exec cage -s -- "$0"
+}
+
 wait_for_x() {
 	local display="${DISPLAY:-:0}"
 	local display_num="${display#:}"
@@ -108,21 +132,28 @@ wait_for_x() {
 # Main loop
 main() {
 	local chromium_bin
+	launch_cage_if_needed
 	chromium_bin=$(find_chromium)
 
 	log_info "Starting kiosk loop"
 	log_info "Chromium binary: $chromium_bin"
-	log_info "DISPLAY=${DISPLAY:-unset}"
-	wait_for_x
+	log_info "Backend=$KIOSK_BACKEND DISPLAY=${DISPLAY:-unset} WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-unset}"
+	if [[ "$KIOSK_BACKEND" == "x11" ]]; then
+		wait_for_x
+	fi
 
 	local restart_count=0
 	local url
 	local extra_flags
-	# Older Intel iGPUs, including Haswell NUCs, can show black frames during
-	# opacity transitions when Chromium uses GPU compositing/zero-copy. Keep
-	# conservative defaults, but allow installs to override via systemd env.
+	local chromium_backend_flags=()
 	extra_flags="${CHROMIUM_EXTRA_FLAGS:-$DEFAULT_CHROMIUM_EXTRA_FLAGS}"
 	read -r -a extra_flag_args <<<"$extra_flags"
+	if [[ "$KIOSK_BACKEND" == "wayland" ]]; then
+		chromium_backend_flags=(
+			--ozone-platform=wayland
+			--enable-features=UseOzonePlatform
+		)
+	fi
 
 	while true; do
 		# Rebuild URL each iteration (config may change)
@@ -142,6 +173,7 @@ main() {
 			--autoplay-policy=no-user-gesture-required \
 			--disable-features=TranslateUI \
 			--disable-breakpad \
+			"${chromium_backend_flags[@]}" \
 			"${extra_flag_args[@]}" \
 			"$url" 2>&1 | while IFS= read -r line; do
 			# Only log errors and important messages

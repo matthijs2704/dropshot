@@ -1,12 +1,18 @@
 [Unit]
 Description=PixelPlein Kiosk Browser
-After=network.target pixelplein-provisioner.service
+Conflicts=getty@tty1.service
+After=systemd-user-sessions.service network.target pixelplein-provisioner.service
 Wants=pixelplein-provisioner.service
 
 [Service]
 User=pixelplein
-Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/pixelplein/.Xauthority
+PAMName=login
+TTYPath=/dev/tty1
+StandardInput=tty
+TTYReset=yes
+TTYVHangup=yes
+Environment=PIXELPLEIN_KIOSK_BACKEND=wayland
+Environment=XDG_SESSION_TYPE=wayland
 ExecStart=/opt/pixelplein/tools/pixelplein-kiosk.sh
 Restart=always
 RestartSec=3

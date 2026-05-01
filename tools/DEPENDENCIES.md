@@ -40,16 +40,15 @@ These are typically pre-installed on minimal server installations:
 | `rsync` | File copying | Install script | Yes |
 | `git` | Version control | Updates, development | Recommended |
 
-### X11 Display Stack
+### Wayland Kiosk Display Stack
 
 | Package | Purpose | Size | Critical? |
 |---------|---------|------|-----------|
-| `xorg` | X11 server | ~150MB | Yes |
-| `openbox` | Window manager | ~2MB | Yes |
-| `unclutter` | Hide mouse cursor | <1MB | Yes |
-| `xinput` | Input device management | ~1MB | Yes |
+| `cage` | Fullscreen Wayland kiosk compositor | ~2MB | Yes |
+| `seatd` | Seat/input access for wlroots sessions | ~1MB | Yes |
+| `dbus-user-session` | User session bus for Chromium | ~1MB | Yes |
 
-**Total X11 footprint**: ~150-200MB
+**Total Wayland footprint**: ~5-20MB plus graphics drivers
 
 ### Browser
 
@@ -91,7 +90,7 @@ The kiosk script auto-detects available binary.
 - sudo (if installed with admin user)
 
 **Missing** (installed by script):
-- X11 stack (xorg, openbox, unclutter, xinput)
+- Wayland kiosk stack (cage, seatd, dbus-user-session)
 - Chromium browser
 - curl, gnupg, ca-certificates (may be missing on minimal)
 - network-manager (uses systemd-networkd by default)
@@ -104,16 +103,15 @@ The kiosk script auto-detects available binary.
 - sudo (if configured)
 
 **Missing** (installed by script):
-- Same as Ubuntu (X11, Chromium, etc.)
+- Same as Ubuntu (Wayland kiosk stack, Chromium, etc.)
 
 ### Raspberry Pi OS Lite (Bookworm)
 
 **Pre-installed**:
 - bash, coreutils, systemd, udev, sudo
-- Some X11 components (if not ultra-minimal)
 
 **Missing** (installed by script):
-- OpenBox, Chromium
+- Cage/Wayland kiosk stack, Chromium
 - network-manager (uses dhcpcd by default)
 - ffmpeg
 
@@ -129,8 +127,8 @@ Core system utils:       ~50MB
   - network-manager
   - sudo (if not present)
 
-X11 display stack:       ~150MB
-  - xorg, openbox, unclutter, xinput
+Wayland kiosk stack:     ~5-20MB
+  - cage, seatd, dbus-user-session
 
 Chromium browser:        ~300MB
 
@@ -191,7 +189,7 @@ Or use a third-party repository like `ppa:savoury1/ffmpeg4` (Ubuntu) or `deb-mul
 ```bash
 # Check if all required commands are available
 for cmd in curl gnupg nmcli systemctl sudo jq rsync git \
-           startx openbox chromium-browser unclutter xinput \
+           cage chromium-browser \
            node npm ffmpeg; do
   command -v $cmd >/dev/null && echo "✓ $cmd" || echo "✗ $cmd MISSING"
 done
@@ -201,7 +199,7 @@ done
 
 ```bash
 # On Debian/Ubuntu/Raspberry Pi OS
-dpkg -l | grep -E "curl|gnupg|network-manager|xorg|openbox|chromium|unclutter|ffmpeg"
+dpkg -l | grep -E "curl|gnupg|network-manager|cage|seatd|chromium|ffmpeg"
 ```
 
 ### Check Service Status
@@ -210,8 +208,8 @@ dpkg -l | grep -E "curl|gnupg|network-manager|xorg|openbox|chromium|unclutter|ff
 # NetworkManager
 systemctl is-active NetworkManager
 
-# X11 prerequisites
-systemctl is-enabled getty@tty1
+# Wayland kiosk prerequisites
+systemctl is-enabled seatd
 
 # Node.js version
 node --version  # Should be v24.x.x
@@ -318,4 +316,4 @@ deb http://deb.debian.org/debian bookworm main non-free-firmware
 - [INSTALLATION.md](INSTALLATION.md) - Complete installation guide
 - [Node.js 24 LTS](https://github.com/nodesource/distributions) - NodeSource setup
 - [NetworkManager](https://wiki.archlinux.org/title/NetworkManager) - Network configuration
-- [OpenBox](http://openbox.org/) - Window manager documentation
+- [Cage](https://www.hjdskes.nl/projects/cage/) - Wayland kiosk compositor

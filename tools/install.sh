@@ -155,16 +155,12 @@ apt-get install -y --no-install-recommends \
 	network-manager \
 	jq rsync git
 
-# X11 and kiosk display
-# - xorg: X11 server
-# - xinit: provides startx for the auto-login X session
-# - openbox: lightweight window manager
+# Wayland kiosk display
+# - cage: fullscreen Wayland compositor for one kiosk app
+# - seatd/dbus-user-session: session plumbing for wlroots/Chromium
 # - chromium/chromium-browser: kiosk browser package name differs per distro
-# - unclutter: hide mouse cursor
-# - xinput: X input device management
 apt-get install -y --no-install-recommends \
-	xorg xinit openbox \
-	unclutter xinput
+	cage seatd dbus-user-session
 install_chromium
 
 # Media processing (for server mode)
@@ -184,6 +180,7 @@ cat >/etc/NetworkManager/conf.d/pixelplein-managed-devices.conf <<'EOF'
 unmanaged-devices=none
 EOF
 systemctl enable NetworkManager 2>/dev/null || true
+systemctl enable seatd 2>/dev/null || true
 # Do not restart NetworkManager here: on fresh installs the active SSH/DNS
 # connection may still be owned by ifupdown. The config takes effect after the
 # final reboot without disrupting the installation session.
@@ -202,57 +199,33 @@ echo "Node $(node --version) / npm $(npm --version)"
 
 # ── 3. pixelplein user + groups ────────────────────────────────────────────
 echo "Creating $APP_USER user..."
+USER_GROUPS="video,audio,plugdev,netdev,render"
+if getent group seat >/dev/null; then
+	USER_GROUPS="$USER_GROUPS,seat"
+fi
 if ! id "$APP_USER" &>/dev/null; then
 	if [[ $PLATFORM == "rpi" ]]; then
-		useradd -m -s /bin/bash -G video,audio,plugdev,netdev,gpio,spi,i2c,render "$APP_USER"
+		useradd -m -s /bin/bash -G "$USER_GROUPS,gpio,spi,i2c" "$APP_USER"
 	else
-		useradd -m -s /bin/bash -G video,audio,plugdev,netdev "$APP_USER"
+		useradd -m -s /bin/bash -G "$USER_GROUPS" "$APP_USER"
 	fi
+else
+	usermod -a -G "$USER_GROUPS" "$APP_USER" 2>/dev/null || true
 fi
 
-# ── 4. Auto-login setup ─────────────────────────────────────────────────────
-echo "Configuring auto-login..."
-if [[ $PLATFORM == "rpi" ]]; then
-	# Try raspi-config first
-	raspi-config nonint do_boot_behaviour B2 2>/dev/null || true
-fi
+# ── 4. Console setup ────────────────────────────────────────────────────────
+echo "Configuring console session..."
+# The kiosk service owns tty1 directly. Remove the old X11 autologin drop-in
+# if it exists from an earlier installer version.
+rm -f /etc/systemd/system/getty@tty1.service.d/autologin.conf
 
-# Getty override (works on all platforms)
-mkdir -p /etc/systemd/system/getty@tty1.service.d
-cat >/etc/systemd/system/getty@tty1.service.d/autologin.conf <<EOF
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin $APP_USER --noclear %I \$TERM
-EOF
+# ── 5. Kiosk session setup ──────────────────────────────────────────────────
+echo "Configuring Wayland kiosk session..."
 
-# ── 5. X11 session setup ────────────────────────────────────────────────────
-echo "Configuring X11 session..."
-
-# Single .xinitrc handles everything
-cat >"/home/$APP_USER/.xinitrc" <<'EOF'
-#!/bin/bash
-# PixelPlein X11 session
-
-# Hide mouse cursor after 1 second of inactivity
-unclutter -idle 1 &
-
-# Disable screen blanking and power management
-xset s off
-xset -dpms
-xset s noblank
-
-# Launch OpenBox window manager
-exec openbox-session
-EOF
-chmod +x "/home/$APP_USER/.xinitrc"
-chown "$APP_USER:$APP_USER" "/home/$APP_USER/.xinitrc"
-
-# .bash_profile: start X on tty1 login
+# The kiosk is started by pixelplein-kiosk.service. Keep tty1 login quiet so
+# systemd owns the fullscreen Cage/Wayland session instead of a shell profile.
 cat >"/home/$APP_USER/.bash_profile" <<'EOF'
-# Auto-start X server on tty1
-if [[ -z $DISPLAY ]] && [[ $(tty) == /dev/tty1 ]]; then
-  exec startx -- -nocursor
-fi
+# PixelPlein kiosk is managed by systemd.
 EOF
 chown "$APP_USER:$APP_USER" "/home/$APP_USER/.bash_profile"
 

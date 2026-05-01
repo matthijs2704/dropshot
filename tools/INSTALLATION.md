@@ -49,10 +49,9 @@ sudo bash tools/install.sh
 
 The script will:
 - Detect platform (Raspberry Pi or generic Linux)
-- Install system packages (X11, OpenBox, Chromium, Node.js 24)
+- Install system packages (Cage/Wayland, Chromium, Node.js 24)
 - Create `pixelplein` user with appropriate groups
-- Configure auto-login on tty1
-- Set up X11 session with cursor hiding and screen blanking disabled
+- Configure the tty1 kiosk session
 - Install application to `/opt/pixelplein`
 - Install npm dependencies
 - Configure systemd services (provisioner, kiosk, server)
@@ -125,12 +124,11 @@ sudo reboot
 ```
 
 On reboot:
-1. System auto-logs in as `pixelplein` user on tty1
-2. `.bash_profile` starts X server
-3. `.xinitrc` launches OpenBox window manager with cursor hiding
-4. Provisioner service starts
-5. Kiosk service launches Chromium in fullscreen
-6. Display shows configured screen or provisioner UI
+1. Provisioner service starts
+2. Kiosk service owns tty1
+3. Cage starts a fullscreen Wayland session
+4. Chromium launches in kiosk mode
+5. Display shows configured screen or provisioner UI
 
 ## Services
 
@@ -158,7 +156,7 @@ sudo systemctl status pixelplein-provisioner
 - **Auto-start**: Yes (always enabled)
 - **Auto-restart**: Yes (infinite loop)
 - **User**: pixelplein
-- **Environment**: DISPLAY=:0
+- **Session**: Cage/Wayland on tty1
 - **Logs**: `journalctl -u pixelplein-kiosk -f`
 
 **Commands**:
@@ -190,23 +188,15 @@ sudo systemctl status pixelplein-server
 ┌─────────────────────────────────────────────────────┐
 │ Physical Device Boot Sequence                       │
 ├─────────────────────────────────────────────────────┤
-│ 1. Auto-login on tty1 (getty)                       │
+│ 1. Systemd services start                           │
 │    ↓                                                │
-│ 2. .bash_profile → startx                           │
+│ 2. pixelplein-provisioner runs on port 3987         │
 │    ↓                                                │
-│ 3. X Server starts (DISPLAY=:0)                     │
+│ 3. pixelplein-kiosk owns tty1                       │
 │    ↓                                                │
-│ 4. .xinitrc executes:                               │
-│    - unclutter (hide cursor)                        │
-│    - xset (disable screensaver)                     │
-│    - openbox-session                                │
+│ 4. Cage starts a fullscreen Wayland compositor      │
 │    ↓                                                │
-│ 5. Systemd services start:                          │
-│    - pixelplein-provisioner (port 3987)             │
-│    - pixelplein-kiosk                               │
-│    - pixelplein-server (if enabled)                 │
-│    ↓                                                │
-│ 6. pixelplein-kiosk.sh launches Chromium:           │
+│ 5. pixelplein-kiosk.sh launches Chromium:           │
 │    - Reads config from ~/.config/pixelplein-screen/ │
 │    - Builds URL with deviceId/token                 │
 │    - Opens fullscreen kiosk mode                    │
@@ -231,15 +221,12 @@ sudo systemctl status pixelplein-server
   └── server.env                          # Server environment variables
 
 /home/pixelplein/                         # User home
-  ├── .bash_profile                       # Auto-start X on tty1
-  ├── .xinitrc                            # X session config
+  ├── .bash_profile                       # Kiosk is managed by systemd
   └── .config/
       └── pixelplein-screen/
           └── config.json                 # Device configuration
 
 /etc/systemd/system/                      # Systemd services
-  ├── getty@tty1.service.d/
-  │   └── autologin.conf                  # Auto-login override
   ├── pixelplein-provisioner.service
   ├── pixelplein-kiosk.service
   └── pixelplein-server.service
@@ -321,16 +308,16 @@ ping backend-server
 curl -I http://backend-server:3000
 ```
 
-### Screen Blanking/Cursor Issues
+### Kiosk Session Issues
 
 ```bash
-# Verify xset settings (as pixelplein user)
-sudo -u pixelplein DISPLAY=:0 xset q
+# Check kiosk session logs
+journalctl -u pixelplein-kiosk -n 120 --no-pager
 
-# Check .xinitrc
-cat /home/pixelplein/.xinitrc
+# Verify Cage is installed
+command -v cage
 
-# Restart X session
+# Restart kiosk session
 sudo systemctl restart pixelplein-kiosk
 ```
 
@@ -423,8 +410,6 @@ sudo udevadm control --reload-rules
 # Optional: Remove user
 sudo userdel -r pixelplein
 
-# Optional: Remove auto-login
-sudo rm /etc/systemd/system/getty@tty1.service.d/autologin.conf
 sudo systemctl daemon-reload
 ```
 

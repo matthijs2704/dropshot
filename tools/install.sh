@@ -6,7 +6,8 @@ set -euo pipefail
 
 APP_DIR=/opt/pixelplein
 APP_USER=pixelplein
-NODE_VERSION=24
+NODE_PREFERRED_VERSION=24
+NODE_MIN_VERSION=20
 
 # ── Platform detection ──────────────────────────────────────────────────────
 detect_platform() {
@@ -90,6 +91,38 @@ install_chromium() {
 	exit 1
 }
 
+node_major() {
+	if ! command -v node &>/dev/null; then
+		echo 0
+		return
+	fi
+	node -e 'process.stdout.write(process.versions.node.split(".")[0])' 2>/dev/null || echo 0
+}
+
+install_nodejs() {
+	local major
+	major="$(node_major)"
+	if [[ "$major" =~ ^[0-9]+$ ]] && (( major >= NODE_MIN_VERSION )); then
+		echo "Node $(node --version) already installed"
+		return
+	fi
+
+	echo "Installing Node.js..."
+	if curl --connect-timeout 10 --retry 2 -fsSL "https://deb.nodesource.com/setup_${NODE_PREFERRED_VERSION}.x" | bash -; then
+		apt-get install -y nodejs
+	else
+		echo "WARNING: NodeSource unavailable, falling back to distro nodejs/npm packages." >&2
+		apt-get install -y nodejs npm
+	fi
+
+	major="$(node_major)"
+	if ! [[ "$major" =~ ^[0-9]+$ ]] || (( major < NODE_MIN_VERSION )); then
+		echo "ERROR: Node.js ${NODE_MIN_VERSION}+ is required; installed version is $(node --version 2>/dev/null || echo unavailable)." >&2
+		echo "Fix DNS/network access or install Node.js ${NODE_MIN_VERSION}+ manually, then rerun this script." >&2
+		exit 1
+	fi
+}
+
 # ── 1. System packages ──────────────────────────────────────────────────────
 echo "Installing system packages..."
 configure_apt_sources
@@ -130,9 +163,14 @@ cat >/etc/NetworkManager/conf.d/pixelplein-ifupdown-managed.conf <<'EOF'
 [ifupdown]
 managed=true
 EOF
+cat >/etc/NetworkManager/conf.d/pixelplein-managed-devices.conf <<'EOF'
+[keyfile]
+unmanaged-devices=none
+EOF
 systemctl enable NetworkManager 2>/dev/null || true
-systemctl start NetworkManager 2>/dev/null || true
-systemctl reload NetworkManager 2>/dev/null || systemctl restart NetworkManager 2>/dev/null || true
+# Do not restart NetworkManager here: on fresh installs the active SSH/DNS
+# connection may still be owned by ifupdown. The config takes effect after the
+# final reboot without disrupting the installation session.
 
 # Raspberry Pi specific: GPU memory
 if [[ $PLATFORM == "rpi" ]]; then
@@ -142,12 +180,8 @@ if [[ $PLATFORM == "rpi" ]]; then
 	fi
 fi
 
-# ── 2. Node.js 24 LTS (NodeSource) ─────────────────────────────────────────
-echo "Installing Node.js ${NODE_VERSION}..."
-if ! command -v node &>/dev/null || [[ "$(node -e 'process.stdout.write(process.versions.node.split(".")[0])')" != "$NODE_VERSION" ]]; then
-	curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash -
-	apt-get install -y nodejs
-fi
+# ── 2. Node.js ──────────────────────────────────────────────────────────────
+install_nodejs
 echo "Node $(node --version) / npm $(npm --version)"
 
 # ── 3. pixelplein user + groups ────────────────────────────────────────────

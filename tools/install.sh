@@ -142,12 +142,13 @@ apt-get install -y --no-install-recommends \
 
 # X11 and kiosk display
 # - xorg: X11 server
+# - xinit: provides startx for the auto-login X session
 # - openbox: lightweight window manager
 # - chromium/chromium-browser: kiosk browser package name differs per distro
 # - unclutter: hide mouse cursor
 # - xinput: X input device management
 apt-get install -y --no-install-recommends \
-	xorg openbox \
+	xorg xinit openbox \
 	unclutter xinput
 install_chromium
 

@@ -78,6 +78,32 @@ find_chromium() {
 	fi
 }
 
+wait_for_x() {
+	local display="${DISPLAY:-:0}"
+	local display_num="${display#:}"
+	display_num="${display_num%%.*}"
+	local socket="/tmp/.X11-unix/X${display_num}"
+	local waited=0
+
+	while [[ ! -S "$socket" ]]; do
+		if (( waited == 0 )); then
+			log_info "Waiting for X display ${display} (${socket})"
+		fi
+		sleep 2
+		waited=$((waited + 2))
+		if (( waited % 30 == 0 )); then
+			log_info "Still waiting for X display ${display}; check auto-login/startx if this continues"
+		fi
+	done
+
+	if [[ -n "${XAUTHORITY:-}" ]]; then
+		while [[ ! -f "$XAUTHORITY" ]]; do
+			log_info "Waiting for Xauthority file $XAUTHORITY"
+			sleep 2
+		done
+	fi
+}
+
 # Main loop
 main() {
 	local chromium_bin
@@ -85,6 +111,8 @@ main() {
 
 	log_info "Starting kiosk loop"
 	log_info "Chromium binary: $chromium_bin"
+	log_info "DISPLAY=${DISPLAY:-unset}"
+	wait_for_x
 
 	local restart_count=0
 	local url

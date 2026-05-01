@@ -55,6 +55,25 @@ async function _waitForImages(el, timeoutMs) {
 export function runTransition(outEl, inEl, type, durationMs) {
   return new Promise(async resolve => {
     const ms = durationMs || 800;
+    const transitionType = type || 'fade';
+
+    // The new element has already been appended by the lifecycle manager.
+    // Hide/position it synchronously before waiting for images, otherwise slow
+    // devices can paint its empty black background before the transition starts.
+    if (outEl) {
+      outEl.style.zIndex = '1';
+      inEl.style.zIndex = '2';
+      if (transitionType === 'slide') {
+        inEl.style.transform = 'translateX(100%)';
+        inEl.style.opacity = '1';
+      } else if (transitionType === 'zoom') {
+        inEl.style.opacity = '0';
+        inEl.style.transform = 'scale(1.04)';
+      } else {
+        inEl.style.opacity = '0';
+        inEl.style.transform = '';
+      }
+    }
 
     await _waitForImages(inEl, Math.min(IMAGE_READY_TIMEOUT_MS, Math.max(250, ms)));
 
@@ -66,24 +85,22 @@ export function runTransition(outEl, inEl, type, durationMs) {
       return;
     }
 
-    if (type === 'fade') {
-      inEl.style.opacity  = '0';
+    if (transitionType === 'fade') {
       inEl.style.transition = `opacity ${ms}ms ${EASE}`;
       requestAnimationFrame(() => {
-        inEl.style.opacity = '1';
-        outEl.style.transition = `opacity ${ms}ms ${EASE}`;
-        outEl.style.opacity = '0';
-        setTimeout(() => {
-          outEl.remove();
-          resolve();
-        }, ms);
+        requestAnimationFrame(() => {
+          inEl.style.opacity = '1';
+          setTimeout(() => {
+            outEl.remove();
+            inEl.style.zIndex = '';
+            resolve();
+          }, ms);
+        });
       });
       return;
     }
 
-    if (type === 'slide') {
-      inEl.style.transform   = 'translateX(100%)';
-      inEl.style.opacity     = '1';
+    if (transitionType === 'slide') {
       inEl.style.transition  = `transform ${ms}ms ${EASE}`;
       outEl.style.transition = `transform ${ms}ms ${EASE}`;
       requestAnimationFrame(() => {
@@ -92,6 +109,7 @@ export function runTransition(outEl, inEl, type, durationMs) {
           outEl.style.transform = 'translateX(-100%)';
           setTimeout(() => {
             outEl.remove();
+            inEl.style.zIndex = '';
             resolve();
           }, ms);
         });
@@ -99,10 +117,8 @@ export function runTransition(outEl, inEl, type, durationMs) {
       return;
     }
 
-    if (type === 'zoom') {
-      inEl.style.opacity    = '0';
-      inEl.style.transform  = 'scale(1.04)';
-      inEl.style.transition = `opacity ${ms}ms ${EASE}, transform ${ms}ms ${EASE}`;
+    inEl.style.transition = `opacity ${ms}ms ${EASE}, transform ${ms}ms ${EASE}`;
+    if (transitionType === 'zoom') {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           inEl.style.opacity   = '1';
@@ -111,6 +127,7 @@ export function runTransition(outEl, inEl, type, durationMs) {
           outEl.style.opacity  = '0';
           setTimeout(() => {
             outEl.remove();
+            inEl.style.zIndex = '';
             resolve();
           }, ms);
         });

@@ -33,6 +33,7 @@ const _dom = {
   event2Time:  null,
   ticker:      null,
   tickerInner: null,
+  deviceInfo:  null,
 };
 
 /** Timer IDs */
@@ -281,6 +282,7 @@ function _updateDividers() {
   if (_dom.event && _showAnyEvent && _dom.event.style.display !== 'none') slots.push(_dom.event);
   if (_dom.event2 && _dom.event2.style.display !== 'none') slots.push(_dom.event2);
   if (_dom.ticker) slots.push(_dom.ticker);
+  if (_dom.deviceInfo && _cfg.infoBarShowDeviceInfo) slots.push(_dom.deviceInfo);
 
   // Insert dividers between adjacent visible slots
   for (let i = 0; i < slots.length - 1; i++) {
@@ -314,7 +316,7 @@ function _makeEventSlot(suffix) {
 // DOM build
 // ---------------------------------------------------------------------------
 
-function _buildBar(cfg) {
+function _buildBar(cfg, screenId) {
   const bar = el('div', { id: 'overlay-infobar' });
 
   // Clock slot
@@ -378,6 +380,33 @@ function _buildBar(cfg) {
     _dom.tickerInner = null;
   }
 
+  // Device info slot — shown when infoBarShowDeviceInfo is on
+  if (cfg.infoBarShowDeviceInfo) {
+    const serverHost = location.hostname
+      + (location.port && location.port !== '80' && location.port !== '443' ? `:${location.port}` : '');
+    _dom.deviceInfo = el('div', { id: 'overlay-infobar-device' });
+    _dom.deviceInfo.textContent = `Screen ${screenId || '?'}  ·  server: ${serverHost}  ·  device: …`;
+    bar.appendChild(_dom.deviceInfo);
+
+    // Async: fill in the NUC's own LAN IP from local agent
+    fetch('http://127.0.0.1:3987/api/status', { signal: AbortSignal.timeout(1500) })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!_dom.deviceInfo) return;
+        const ip = data?.lanIps?.[0];
+        _dom.deviceInfo.textContent = ip
+          ? `Screen ${screenId || '?'}  ·  server: ${serverHost}  ·  device: ${ip}`
+          : `Screen ${screenId || '?'}  ·  server: ${serverHost}`;
+      })
+      .catch(() => {
+        if (_dom.deviceInfo) {
+          _dom.deviceInfo.textContent = `Screen ${screenId || '?'}  ·  server: ${serverHost}`;
+        }
+      });
+  } else {
+    _dom.deviceInfo = null;
+  }
+
   return bar;
 }
 
@@ -387,10 +416,11 @@ function _buildBar(cfg) {
 
 /**
  * Mount (or remount) the info bar.
- * @param {object} cfg   Screen config object
+ * @param {object} cfg       Screen config object
  * @param {Array}  schedule  Sorted array of schedule entries
+ * @param {string} [screenId] Screen ID for the device info slot
  */
-export function mountInfoBar(cfg, schedule) {
+export function mountInfoBar(cfg, schedule, screenId) {
   removeInfoBar();
 
   _cfg      = cfg || {};
@@ -400,7 +430,7 @@ export function mountInfoBar(cfg, schedule) {
   _tickerMessages = filterTickerMessages(_cfg.tickerMessages);
   _tickerDwellMs  = Math.max(500, (Number(_cfg.tickerFadeDwellSec) || 5) * 1000);
 
-  _dom.bar = _buildBar(_cfg);
+  _dom.bar = _buildBar(_cfg, screenId);
   if (_cfg.infoBarFontSize) {
     const fs = _cfg.infoBarFontSize;
     _dom.bar.style.setProperty('--infobar-font-size', `${fs}px`);

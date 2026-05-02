@@ -285,6 +285,7 @@ function _screenCardHtml(id) {
           <span class="screen-card-layout" id="s${id}-layout">–</span>
           <span class="screen-card-sep">·</span>
           <span class="screen-card-seen" id="s${id}-seen">–</span>
+          <span class="screen-card-sw" id="s${id}-sw-version"></span>
         </div>
         <div class="screen-status-badge" id="s${id}-status-badge">Offline</div>
       </div>
@@ -463,6 +464,9 @@ function _renderScreenHealth(prefix, data) {
   if (seen)       seen.textContent       = agoText;
   if (layout)     layout.textContent     = layoutText;
   if (layoutMeta) layoutMeta.textContent = layoutText;
+
+  const swEl = document.getElementById(`${prefix}-sw-version`);
+  if (swEl) swEl.textContent = data?.swVersion != null ? `SW v${data.swVersion}` : '';
 }
 
 // ---------------------------------------------------------------------------

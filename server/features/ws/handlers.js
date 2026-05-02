@@ -234,6 +234,7 @@ function handleMessage(ws, msg) {
       layoutType:         msg.layoutType || null,
       focusGroup:         msg.focusGroup || null,
       visiblePhotoIds:    Array.isArray(msg.visibleIds) ? msg.visibleIds.slice(0, 24) : [],
+      swVersion:          msg.swVersion != null ? Number(msg.swVersion) : null,
     });
     ws.screenId = screenId;
     return;

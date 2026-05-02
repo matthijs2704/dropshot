@@ -557,6 +557,12 @@ details.section > .section-body { padding: 14px 16px; display: flex; flex-direct
 .screen-card.compact .screen-card-seen {
   color: var(--muted);
 }
+.screen-card.compact .screen-card-sw {
+  color: var(--muted);
+  font-size: 11px;
+  margin-left: auto;
+  white-space: nowrap;
+}
 .screen-card-compact-body {
   padding: 10px 14px;
   display: flex;

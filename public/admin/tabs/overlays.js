@@ -56,7 +56,7 @@ const SECTION_KEYS = {
   ticker:  ['tickerEnabled', 'tickerMessages', 'tickerMode', 'tickerAlign', 'tickerPosition', 'tickerSpeed', 'tickerFadeDwellSec'],
   bug:     ['bugEnabled', 'bugText', 'bugCorner', 'bugImageUrl'],
   qrbug:   ['qrBugEnabled', 'qrBugUrl', 'qrBugCorner', 'qrBugLabel'],
-  infobar: ['infoBarEnabled', 'infoBarShowClock', 'infoBarShowCurrentEvent', 'infoBarShowNextEvent'],
+  infobar: ['infoBarEnabled', 'infoBarShowClock', 'infoBarShowCurrentEvent', 'infoBarShowNextEvent', 'infoBarShowDeviceInfo'],
 };
 
 // Check if all keys in a section are null (inheriting)
@@ -214,6 +214,10 @@ function _buildOverlayForm(screenId, cfg) {
               <input type="checkbox" id="ov-${prefix}-infobar-next-event">
               <label for="ov-${prefix}-infobar-next-event">Show next event</label>
             </div>
+            <div class="check-row">
+              <input type="checkbox" id="ov-${prefix}-infobar-device-info">
+              <label for="ov-${prefix}-infobar-device-info">Show screen ID &amp; IP</label>
+            </div>
             <p class="field-hint">When enabled, the ticker integrates into the bar rather than appearing as a separate strip.</p>
           </div>
         </div>
@@ -266,6 +270,7 @@ function _applyToForm(screenId, sc, cfg) {
   _setChk(`ov-${prefix}-infobar-clock`, resolved.infoBarShowClock !== false);
   _setChk(`ov-${prefix}-infobar-current-event`, resolved.infoBarShowCurrentEvent !== false);
   _setChk(`ov-${prefix}-infobar-next-event`, resolved.infoBarShowNextEvent !== false);
+  _setChk(`ov-${prefix}-infobar-device-info`, resolved.infoBarShowDeviceInfo || false);
 }
 
 // ── Global overlay defaults form ──────────────────────────────────────────
@@ -299,6 +304,7 @@ function _applyGlobalToForm(cfg) {
   _setChk('ov-global-infobar-clock', cfg.infoBarShowClock !== false);
   _setChk('ov-global-infobar-current-event', cfg.infoBarShowCurrentEvent !== false);
   _setChk('ov-global-infobar-next-event', cfg.infoBarShowNextEvent !== false);
+  _setChk('ov-global-infobar-device-info', cfg.infoBarShowDeviceInfo || false);
 
   // Alert defaults
   _setVal('ov-global-alert-style', cfg.alertStyle || 'banner');
@@ -342,6 +348,7 @@ function _readGlobal() {
   cfg.infoBarShowClock        = _getChk('ov-global-infobar-clock');
   cfg.infoBarShowCurrentEvent = _getChk('ov-global-infobar-current-event');
   cfg.infoBarShowNextEvent    = _getChk('ov-global-infobar-next-event');
+  cfg.infoBarShowDeviceInfo   = _getChk('ov-global-infobar-device-info');
 
   // Alert defaults
   cfg.alertStyle       = _getVal('ov-global-alert-style');
@@ -406,6 +413,7 @@ function _readSectionValues(prefix, section, sc) {
     sc.infoBarShowClock        = _getChk(`ov-${prefix}-infobar-clock`);
     sc.infoBarShowCurrentEvent = _getChk(`ov-${prefix}-infobar-current-event`);
     sc.infoBarShowNextEvent    = _getChk(`ov-${prefix}-infobar-next-event`);
+    sc.infoBarShowDeviceInfo   = _getChk(`ov-${prefix}-infobar-device-info`);
   }
 }
 
@@ -553,6 +561,7 @@ function _bindGlobal() {
     'ov-global-qrbug-enabled', 'ov-global-qrbug-corner',
     'ov-global-infobar-enabled', 'ov-global-infobar-clock',
     'ov-global-infobar-current-event', 'ov-global-infobar-next-event',
+    'ov-global-infobar-device-info',
   ];
   const inputIds = [
     'ov-global-sched-duration', 'ov-global-infobar-font-size',
@@ -620,6 +629,7 @@ function _bindScreen(screenId) {
     `ov-${prefix}-qrbug-enabled`,  `ov-${prefix}-qrbug-corner`,
     `ov-${prefix}-infobar-enabled`, `ov-${prefix}-infobar-clock`,
     `ov-${prefix}-infobar-current-event`, `ov-${prefix}-infobar-next-event`,
+    `ov-${prefix}-infobar-device-info`,
   ];
   const inputIds = [
     `ov-${prefix}-ticker-speed`, `ov-${prefix}-ticker-dwell`,

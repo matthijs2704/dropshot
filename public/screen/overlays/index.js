@@ -43,7 +43,7 @@ export async function applyOverlays(config) {
   if (cfg.infoBarEnabled) {
     // Info bar takes over the bottom edge; standalone ticker is suppressed
     removeTicker();
-    mountInfoBar(cfgWithGlobals, _schedule);
+    mountInfoBar(cfgWithGlobals, _schedule, _screenId);
     safeInsets.bottom = getInfoBarHeight();
   } else {
     removeInfoBar();

@@ -183,6 +183,15 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // SW version probe — served directly by the service worker without network
+  if (p === '/sw-version') {
+    event.respondWith(new Response(
+      JSON.stringify({ version: SHELL_VERSION }),
+      { headers: { 'Content-Type': 'application/json' } },
+    ));
+    return;
+  }
+
   // Everything else (API, admin, WS, videos): Network-only
 });
 

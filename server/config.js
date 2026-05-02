@@ -27,7 +27,7 @@ const OVERLAY_KEYS = [
   'bugEnabled', 'bugText', 'bugCorner', 'bugImageUrl',
   'qrBugEnabled', 'qrBugUrl', 'qrBugCorner', 'qrBugLabel',
   'infoBarEnabled', 'infoBarShowClock', 'infoBarShowCurrentEvent',
-  'infoBarShowNextEvent',
+  'infoBarShowNextEvent', 'infoBarShowDeviceInfo',
 ];
 
 function defaultScreenConfig() {
@@ -88,6 +88,7 @@ function defaultScreenConfig() {
     infoBarShowClock: null,
     infoBarShowCurrentEvent: null,
     infoBarShowNextEvent: null,
+    infoBarShowDeviceInfo: null,
   };
 }
 
@@ -157,6 +158,7 @@ function defaultConfig() {
     infoBarShowClock: true,
     infoBarShowCurrentEvent: true,
     infoBarShowNextEvent: true,
+    infoBarShowDeviceInfo: false,
     // Alert defaults (pre-fill for manually-created alerts)
     alertStyle: 'banner',
     alertPosition: 'top-center',
@@ -282,6 +284,7 @@ const SCREEN_CONFIG_SCHEMA = {
   infoBarShowClock:        { type: 'bool' },
   infoBarShowCurrentEvent: { type: 'bool' },
   infoBarShowNextEvent:    { type: 'bool' },
+  infoBarShowDeviceInfo:   { type: 'bool' },
 };
 
 // Derived from schema — all keys that sanitizeScreenConfig will accept.
@@ -755,6 +758,9 @@ function _sanitizeGlobalOverlayFields(raw, target) {
   }
   if (Object.prototype.hasOwnProperty.call(raw, 'infoBarShowNextEvent')) {
     target.infoBarShowNextEvent = Boolean(raw.infoBarShowNextEvent);
+  }
+  if (Object.prototype.hasOwnProperty.call(raw, 'infoBarShowDeviceInfo')) {
+    target.infoBarShowDeviceInfo = Boolean(raw.infoBarShowDeviceInfo);
   }
 }
 

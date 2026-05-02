@@ -99,6 +99,7 @@ function buildStats() {
       focusGroup:          data.focusGroup || null,
       reconnects:          data.reconnects || 0,
       visiblePhotoIds:     Array.isArray(data.visiblePhotoIds) ? data.visiblePhotoIds : [],
+      swVersion:           data.swVersion != null ? data.swVersion : null,
     }));
 
   return {

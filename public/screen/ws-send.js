@@ -71,6 +71,7 @@ export function sendHeartbeat(state) {
     visibleIds:          state.visibleIds          || [],
     lastCycleAt:         state.lastCycleAt         || 0,
     lastCycleDurationMs: state.lastCycleDurationMs || null,
+    swVersion:           state.swVersion != null ? Number(state.swVersion) : null,
   });
 }
 

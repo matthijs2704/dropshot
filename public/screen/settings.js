@@ -2,13 +2,12 @@
 
 // ---------------------------------------------------------------------------
 // In-screen settings overlay
-// Press F12 to open. Shows device/setup info, screen ID selector, admin QR.
-// Communicates with the local provisioner (127.0.0.1:3987) if running.
+// Press F12 to open. Shows device/setup info, screen ID selector, SW version.
+// Communicates with the local agent (127.0.0.1:3987) if running.
 // ---------------------------------------------------------------------------
 
-const PROVISIONER_URL   = 'http://127.0.0.1:3987';
-const AUTO_CLOSE_MS     = 60_000;
-const QR_SIZE           = 200;
+const AGENT_URL     = 'http://127.0.0.1:3987';
+const AUTO_CLOSE_MS = 60_000;
 
 let _screenId     = '1';
 let _closeTimer   = null;
@@ -47,20 +46,13 @@ async function _open() {
   _overlayEl.classList.remove('settings-hidden');
   _overlayEl.innerHTML = '<div class="settings-card"><p class="settings-loading">Laden…</p></div>';
 
-  const [info, provisioner] = await Promise.all([
+  const [info, agent, swVersion] = await Promise.all([
     _fetchInfo(),
-    _fetchProvisioner(),
+    _fetchAgent(),
+    _fetchSwVersion(),
   ]);
 
-  // When running on localhost the origin is useless for phone scanning —
-  // substitute the real LAN IP. If already on a real IP/domain, keep it.
-  const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-  const adminBase = (isLocal && info?.lanIps?.length)
-    ? `http://${info.lanIps[0]}:${info.port || 3000}`
-    : location.origin;
-  const qrSrc = await _buildQr(`${adminBase}/admin`);
-
-  _render(info, provisioner, qrSrc);
+  _render(info, agent, swVersion);
   _closeTimer = setTimeout(_close, AUTO_CLOSE_MS);
 }
 
@@ -68,22 +60,23 @@ async function _open() {
 // Render
 // ---------------------------------------------------------------------------
 
-function _render(info, provisioner, qrSrc) {
-  const deviceIps = provisioner?.lanIps?.length
-    ? provisioner.lanIps
+function _render(info, agent, swVersion) {
+  const deviceIps = agent?.lanIps?.length
+    ? agent.lanIps
     : [];
   const deviceSetupUrl = deviceIps.length
     ? `http://${deviceIps[0]}:3987`
-    : PROVISIONER_URL;
-  const backendUrl = provisioner?.config?.serverUrl || location.origin;
+    : AGENT_URL;
+  const backendUrl = agent?.config?.serverUrl || location.origin;
+  const pairingCode = agent?.agent?.pairingCode || '';
 
   const screenButtons = [1, 2, 3, 4].map(n => {
     const active = String(n) === _screenId;
     return `<button class="settings-screen-btn${active ? ' active' : ''}" data-screen="${n}">${n}</button>`;
   }).join('');
 
-  const provisionerSection = provisioner
-    ? `<a class="settings-link" href="${_esc(deviceSetupUrl)}" target="_blank">Setup opnieuw (provisioner)</a>`
+  const agentSection = agent
+    ? `<a class="settings-link" href="${_esc(deviceSetupUrl)}" target="_blank">Setup opnieuw (agent)</a>`
     : '';
 
   _overlayEl.innerHTML = `
@@ -92,7 +85,7 @@ function _render(info, provisioner, qrSrc) {
 
       <div class="settings-section">
         <div class="settings-label">Device</div>
-        <div class="settings-value settings-mono">${_esc(provisioner ? deviceSetupUrl : 'Geen lokale provisioner')}</div>
+        <div class="settings-value settings-mono">${_esc(agent ? deviceSetupUrl : 'Geen lokale agent')}</div>
       </div>
 
       ${deviceIps.length ? `<div class="settings-section">
@@ -106,17 +99,22 @@ function _render(info, provisioner, qrSrc) {
       </div>
 
       <div class="settings-section">
+        <div class="settings-label">SW versie</div>
+        <div class="settings-value settings-mono">${swVersion != null ? `v${_esc(String(swVersion))}` : '–'}</div>
+      </div>
+
+      ${pairingCode ? `<div class="settings-section">
+        <div class="settings-label">Koppelcode</div>
+        <div class="settings-value settings-mono" style="font-size:1.2em;letter-spacing:.1em">${_esc(pairingCode)}</div>
+      </div>` : ''}
+
+      <div class="settings-section">
         <div class="settings-label">Scherm ID</div>
         <div class="settings-screen-btns">${screenButtons}</div>
       </div>
 
-      ${qrSrc ? `<div class="settings-section settings-qr-section">
-        <div class="settings-label">Admin QR</div>
-        <img class="settings-qr" src="${qrSrc}" alt="QR code admin" width="${QR_SIZE}" height="${QR_SIZE}">
-      </div>` : ''}
-
       <div class="settings-footer">
-        ${provisionerSection}
+        ${agentSection}
         <span class="settings-muted">Sluit: Escape of F12 · Auto-sluit na 60 s</span>
       </div>
     </div>
@@ -140,17 +138,17 @@ function _render(info, provisioner, qrSrc) {
 async function _switchScreen(newId) {
   if (String(newId) === _screenId) return;
 
-  // Try to persist via provisioner first
-  const prov = await _fetchProvisioner();
-  if (prov?.config) {
+  // Try to persist via agent first
+  const ag = await _fetchAgent();
+  if (ag?.config) {
     try {
-      await fetch(`${PROVISIONER_URL}/api/apply`, {
+      await fetch(`${AGENT_URL}/api/apply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...prov.config, screenId: String(newId) }),
+        body: JSON.stringify({ ...ag.config, screenId: String(newId) }),
       });
     } catch {
-      // provisioner unreachable — just navigate
+      // agent unreachable — just navigate
     }
   }
 
@@ -172,21 +170,19 @@ async function _fetchInfo() {
   }
 }
 
-async function _fetchProvisioner() {
+async function _fetchAgent() {
   try {
-    const r = await fetch(`${PROVISIONER_URL}/api/status`, { signal: AbortSignal.timeout(1500) });
+    const r = await fetch(`${AGENT_URL}/api/status`, { signal: AbortSignal.timeout(1500) });
     return r.ok ? r.json() : null;
   } catch {
     return null;
   }
 }
 
-async function _buildQr(url) {
+async function _fetchSwVersion() {
   try {
-    const r = await fetch(`/api/slides/qr?url=${encodeURIComponent(url)}&size=${QR_SIZE}`);
-    if (!r.ok) return null;
-    const blob = await r.blob();
-    return URL.createObjectURL(blob);
+    const r = await fetch('/sw-version');
+    return r.ok ? (await r.json()).version : null;
   } catch {
     return null;
   }

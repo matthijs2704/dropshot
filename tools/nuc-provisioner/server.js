@@ -32,6 +32,10 @@ let _agentStatus = {
   reconnectAttempts: 0,
 };
 
+/** Active session tokens (in-memory; cleared on process restart). */
+const _sessions = new Set();
+let _webPin     = '';
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -83,6 +87,22 @@ function _getLocalIPs() {
 
 function _id() {
   return crypto.randomBytes(16).toString('hex');
+}
+
+function _parseCookies(req) {
+  const header = req.headers.cookie || '';
+  const result = {};
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx < 0) continue;
+    result[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim());
+  }
+  return result;
+}
+
+function _isAuthed(req) {
+  const token = _parseCookies(req).prov_session;
+  return Boolean(token && _sessions.has(token));
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +176,7 @@ function _sanitizeConfig(raw) {
     network:     network?.interface ? network : null,
     kiosk:       { autostart: src.kiosk?.autostart !== false },
     localServer: localServer,
+    webPin:      String(src.webPin || '').trim().toUpperCase() || undefined,
     updatedAt:   Date.now(),
   };
 }
@@ -234,6 +255,7 @@ async function applyProvisioning(raw) {
   };
   const config = _sanitizeConfig(merged);
   await _writeConfig(config);
+  if (config.webPin) _webPin = config.webPin;
   // Order: network → wifi → local-server control
   await _applyNetwork(config);
   await _applyWifi(config);
@@ -678,46 +700,7 @@ async function _status() {
 // Setup page
 // ---------------------------------------------------------------------------
 
-function _esc(str) {
-  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function _ago(ts) {
-  if (!ts) return '—';
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 5)  return 'zojuist';
-  if (s < 60) return `${s}s geleden`;
-  if (s < 3600) return `${Math.floor(s / 60)}m geleden`;
-  return `${Math.floor(s / 3600)}u geleden`;
-}
-
-function _page(status) {
-  const cfg        = status?.config;
-  const ips        = (status?.lanIps || []).join(', ') || '—';
-  const serverRunning = status?.serverRunning;
-  const kioskRunning  = status?.kioskRunning;
-  const modeLabel  = cfg?.localServer?.enabled === false ? 'Extern' : 'Lokaal';
-  const screenUrl  = _esc(status?.screenUrl || '');
-  const agent       = status?.agent || {};
-  const agentSig    = `${agent.connected ? '1' : '0'}|${agent.pairingCode || ''}|${agent.lastError || ''}|${agent.reconnectAttempts || 0}`;
-  const configJson = cfg ? _esc(JSON.stringify({ serverUrl: cfg.serverUrl, screenId: cfg.screenId, deviceLabel: cfg.deviceLabel }, null, 2)) : '';
-  const adminUrl   = cfg?.serverUrl ? _esc(`${cfg.serverUrl}/admin`) : '';
-
-  // Pairing section — shown when waiting for approval
-  const pairingSection = (!agent.connected && agent.pairingCode) ? `
-<div class="card" style="border-color:#2d4a6e">
-  <h2>Koppelen</h2>
-  <p style="font-size:13px;color:#8899aa;margin-bottom:12px">Ga in de admin naar <strong>Instellingen → Schermen &amp; apparaten</strong> en keur dit apparaat goed.</p>
-  <div class="row"><span class="label">Koppelcode</span><span class="val" style="font-size:22px;letter-spacing:.15em;color:#7dd3fc">${_esc(agent.pairingCode)}</span></div>
-  <div class="row"><span class="label">Apparaat-ID</span><span class="val" style="font-size:11px">${_esc(cfg?.agent?.deviceId || '—')}</span></div>
-  ${adminUrl ? `<div class="row" style="margin-top:8px"><a href="${adminUrl}" target="_blank" style="color:#4ea1ff;font-size:13px;font-weight:600">→ Open admin (${_esc(cfg.serverUrl)})</a></div>` : ''}
-  <div id="pair-msg"></div>
-</div>` : '';
-
-  return `<!doctype html>
-<html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PixelPlein Agent Setup</title>
-<style>
+const _pageStyles = `
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0d0d12;color:#e2e2f0;padding:24px;line-height:1.5;font-size:14px}
 h1{font-size:22px;font-weight:700;margin-bottom:4px;color:#fff}
@@ -745,8 +728,79 @@ textarea{font-family:monospace;font-size:12px;resize:vertical}
 .error{color:#e05c5c;font-size:13px;margin-top:8px}
 .success{color:#3ecf8e;font-size:13px;margin-top:8px}
 pre{background:#14141c;padding:12px;border-radius:8px;font-size:12px;white-space:pre-wrap;overflow-wrap:break-word;border:1px solid #272736}
-a{color:#6c63ff}
+a{color:#6c63ff}`;
+
+function _loginPage(errorMsg) {
+  return `<!doctype html>
+<html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PixelPlein Agent — Inloggen</title>
+<style>${_pageStyles}
+.login-wrap{max-width:360px;margin:80px auto 0}
 </style></head>
+<body>
+<div class="login-wrap">
+<h1>PixelPlein Agent</h1>
+<p class="sub">Lokale agent · poort ${PORT}</p>
+<div class="card">
+  <h2>Toegangscode</h2>
+  <input id="pin" type="password" inputmode="numeric" placeholder="Voer PIN in" autofocus>
+  ${errorMsg ? `<div class="error">${_esc(errorMsg)}</div>` : '<div id="err" class="error" style="display:none"></div>'}
+  <p style="margin-top:12px"><button class="primary" onclick="login()">Inloggen</button></p>
+</div>
+</div>
+<script>
+document.getElementById('pin').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+async function login(){
+  const pin=document.getElementById('pin').value.trim();
+  const r=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin})});
+  const d=await r.json();
+  if(d.ok){location.reload();}
+  else{const el=document.getElementById('err');if(el){el.textContent=d.error||'Fout';el.style.display='';}}
+}
+</script>
+</body></html>`;
+}
+
+function _esc(str) {
+  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function _ago(ts) {
+  if (!ts) return '—';
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 5)  return 'zojuist';
+  if (s < 60) return `${s}s geleden`;
+  if (s < 3600) return `${Math.floor(s / 60)}m geleden`;
+  return `${Math.floor(s / 3600)}u geleden`;
+}
+
+function _page(status) {
+  const cfg        = status?.config;
+  const ips        = (status?.lanIps || []).join(', ') || '—';
+  const serverRunning = status?.serverRunning;
+  const kioskRunning  = status?.kioskRunning;
+  const modeLabel  = cfg?.localServer?.enabled === false ? 'Extern' : 'Lokaal';
+  const screenUrl  = _esc(status?.screenUrl || '');
+  const agent       = status?.agent || {};
+  const agentSig    = `${agent.connected ? '1' : '0'}|${agent.pairingCode || ''}|${agent.lastError || ''}|${agent.reconnectAttempts || 0}`;
+  const configJson = cfg ? _esc(JSON.stringify({ serverUrl: cfg.serverUrl, screenId: cfg.screenId, deviceLabel: cfg.deviceLabel }, null, 2)) : '';
+  const adminUrl   = cfg?.serverUrl ? _esc(`${cfg.serverUrl}/admin`) : '';
+
+  // Pairing section — shown when waiting for approval
+  const pairingSection = (!agent.connected && agent.pairingCode) ? `
+<div class="card" style="border-color:rgba(108,99,255,.4)">
+  <h2>Koppelen</h2>
+  <p style="font-size:13px;color:#7070a0;margin-bottom:12px">Ga in de admin naar <strong>Instellingen → Schermen &amp; apparaten</strong> en keur dit apparaat goed.</p>
+  <div class="row"><span class="label">Koppelcode</span><span class="val" style="font-size:22px;letter-spacing:.15em;color:#6c63ff">${_esc(agent.pairingCode)}</span></div>
+  <div class="row"><span class="label">Apparaat-ID</span><span class="val" style="font-size:11px">${_esc(cfg?.agent?.deviceId || '—')}</span></div>
+  ${adminUrl ? `<div class="row" style="margin-top:8px"><a href="${adminUrl}" target="_blank" style="font-size:13px;font-weight:600">→ Open admin (${_esc(cfg.serverUrl)})</a></div>` : ''}
+  <div id="pair-msg"></div>
+</div>` : '';
+
+  return `<!doctype html>
+<html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PixelPlein Agent Setup</title>
+<style>${_pageStyles}</style></head>
 <body>
 <h1>PixelPlein Agent</h1>
 <p class="sub">Lokale agent · poort ${PORT}</p>
@@ -835,6 +889,46 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(204, _corsHeaders());
       return res.end();
     }
+
+    // Auth endpoints — always accessible
+    if (req.method === 'POST' && req.url === '/auth/login') {
+      const { pin } = await _readBody(req);
+      if (!_webPin || String(pin || '').trim().toUpperCase() !== _webPin) {
+        return _json(res, 401, { ok: false, error: 'Verkeerde toegangscode' });
+      }
+      const token = crypto.randomBytes(32).toString('hex');
+      _sessions.add(token);
+      const headers = {
+        ..._corsHeaders(),
+        'Content-Type': 'application/json',
+        'Set-Cookie': `prov_session=${token}; HttpOnly; SameSite=Strict; Path=/`,
+      };
+      const data = JSON.stringify({ ok: true });
+      res.writeHead(200, { ...headers, 'Content-Length': Buffer.byteLength(data) });
+      return res.end(data);
+    }
+
+    if (req.method === 'POST' && req.url === '/auth/logout') {
+      const token = _parseCookies(req).prov_session;
+      if (token) _sessions.delete(token);
+      const headers = {
+        ..._corsHeaders(),
+        'Content-Type': 'application/json',
+        'Set-Cookie': 'prov_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0',
+      };
+      const data = JSON.stringify({ ok: true });
+      res.writeHead(200, { ...headers, 'Content-Length': Buffer.byteLength(data) });
+      return res.end(data);
+    }
+
+    // Auth gate — all other routes require a valid session
+    if (!_isAuthed(req)) {
+      if (req.method === 'GET' && req.url === '/') {
+        return _html(res, _loginPage());
+      }
+      return _json(res, 401, { ok: false, error: 'Unauthorized' });
+    }
+
     if (req.method === 'GET' && req.url === '/') {
       const st = await _status();
       return _html(res, _page(st));
@@ -875,18 +969,31 @@ const server = http.createServer(async (req, res) => {
 // Boot: auto-scan USB, optionally launch kiosk
 // ---------------------------------------------------------------------------
 
-scanUsb()
-  .then(config => {
+async function _boot() {
+  // Ensure PIN exists in config; generate one if missing
+  let cfg = await _readConfig();
+  if (!cfg || !cfg.webPin) {
+    cfg = cfg || {};
+    cfg.webPin = crypto.randomBytes(3).toString('hex').toUpperCase();
+    await _writeConfig(cfg);
+  }
+  _webPin = cfg.webPin;
+
+  // Auto-scan USB on startup
+  try {
+    const config = await scanUsb();
     if (ENABLE_LAUNCH && config?.kiosk?.autostart !== false) _launchChromium(config);
-    _scheduleAgentConnect(500);
-  })
-  .catch(err => {
+  } catch (err) {
     _lastError = err.message;
-    _scheduleAgentConnect(500);
-  });
+  }
+  _scheduleAgentConnect(500);
+}
+
+_boot().catch(err => { _lastError = err.message; });
 
 server.listen(PORT, HOST, () => {
   console.log(`PixelPlein provisioner running on http://${HOST}:${PORT}`);
   const ips = _getLocalIPs();
   if (ips.length) console.log(`LAN IPs: ${ips.join(', ')}`);
+  console.log(`PIN:     ${_webPin}`);
 });

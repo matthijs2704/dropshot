@@ -37,14 +37,26 @@
     z-index: 1;
   }
   #waiting.hidden { opacity: 0; pointer-events: none; }
-  .waiting-icon {
-    width: 64px; height: 64px;
-    border-radius: 16px;
-    background: linear-gradient(135deg, var(--waiting-accent, #7dd3fc) 0%, var(--waiting-accent-2, #facc15) 100%);
-    display: flex; align-items: center; justify-content: center;
+  .waiting-logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
     animation: waiting-breathe 3s ease-in-out infinite;
   }
-  .waiting-icon svg { width: 32px; height: 32px; fill: none; stroke: #fff; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .waiting-logo-img {
+    width: clamp(64px, 10vw, 96px);
+    height: clamp(64px, 10vw, 96px);
+  }
+  .waiting-logo-name {
+    font-size: clamp(22px, 4vw, 36px);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    background: linear-gradient(135deg, var(--waiting-accent, #7dd3fc) 0%, var(--waiting-accent-2, #facc15) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
   .waiting-title { font-size: clamp(18px, 3vw, 28px); font-weight: 700; letter-spacing: 0.01em; }
   .waiting-sub {
     font-size: clamp(12px, 1.8vw, 16px);

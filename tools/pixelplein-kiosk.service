@@ -13,7 +13,7 @@ TTYReset=yes
 TTYVHangup=yes
 Environment=PIXELPLEIN_KIOSK_BACKEND=wayland
 Environment=XDG_SESSION_TYPE=wayland
-ExecStart=/opt/pixelplein/tools/pixelplein-kiosk.sh
+ExecStart=systemd-inhibit --what=idle:sleep:handle-lid-switch --who=pixelplein-kiosk --why="Kiosk display must stay on" /opt/pixelplein/tools/pixelplein-kiosk.sh
 Restart=always
 RestartSec=3
 

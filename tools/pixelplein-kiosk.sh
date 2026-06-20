@@ -96,11 +96,11 @@ launch_cage_if_needed() {
 	mkdir -p "$XDG_RUNTIME_DIR"
 	chmod 700 "$XDG_RUNTIME_DIR"
 
-	log_info "Starting Wayland kiosk session with Cage"
+	log_info "Starting Wayland kiosk session with Cage (idle disabled)"
 	if command -v dbus-run-session &>/dev/null; then
-		exec dbus-run-session -- cage -s -- "$0"
+		exec dbus-run-session -- cage -ds -- "$0"
 	fi
-	exec cage -s -- "$0"
+	exec cage -ds -- "$0"
 }
 
 wait_for_x() {
@@ -140,6 +140,8 @@ main() {
 	log_info "Backend=$KIOSK_BACKEND DISPLAY=${DISPLAY:-unset} WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-unset}"
 	if [[ "$KIOSK_BACKEND" == "x11" ]]; then
 		wait_for_x
+		xset s off -dpms 2>/dev/null || true
+		log_info "Disabled X11 screen saver and DPMS"
 	fi
 
 	local restart_count=0
